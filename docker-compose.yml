@@ -1,0 +1,13 @@
+services:
+  lib:
+    build: .
+    volumes:
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+      - ./packages/node/src:/app/packages/node/src
+      - ./packages/node/dist:/app/packages/node/dist
+      - ./packages/node/tsconfig.json:/app/packages/node/tsconfig.json
+      - ./packages/node/tsconfig.build.json:/app/packages/node/tsconfig.build.json
+      - ./packages/web/src:/app/packages/web/src
+      - ./packages/web/dist:/app/packages/web/dist
+      - ./packages/web/tsconfig.json:/app/packages/web/tsconfig.json
+      - ./packages/web/tsconfig.build.json:/app/packages/web/tsconfig.build.json
