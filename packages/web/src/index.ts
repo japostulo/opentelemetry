@@ -1,5 +1,12 @@
 // ── Tracing ─────────────────────────────────────────────────────────────
-export { initTracing, type HaocWebConfig } from './tracing';
+export {
+  initTracing,
+  resolveWebProfile,
+  matchesAny,
+  type HaocWebConfig,
+  type HaocWebProfileName,
+  type ResolvedWebProfile,
+} from './tracing';
 
 // ── Page Context ────────────────────────────────────────────────────────
 export { setCurrentRoute } from './processor';

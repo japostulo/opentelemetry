@@ -2,6 +2,15 @@ import { Context, propagation } from '@opentelemetry/api';
 import { SpanProcessor, ReadableSpan, Span } from '@opentelemetry/sdk-trace-base';
 import { getUser, HAOC_USER_ATTR, HAOC_USER_TYPE_ATTR, HAOC_USER_ROLE_ATTR } from './identity';
 import type { BrowserInfo } from './browser';
+import { matchesAny } from './profile';
+
+export interface HaocSpanProcessorOptions {
+  /**
+   * URL patterns whose spans should be dropped before export. Compared
+   * against `http.url`, `http.target`, and the span name.
+   */
+  ignoreUrls?: RegExp[];
+}
 
 // ── Module-level Route State ────────────────────────────────────────────
 
@@ -36,13 +45,49 @@ export function setCurrentRoute(routeName: string, routePath: string): void {
 export class HaocSpanProcessor implements SpanProcessor {
   private readonly browserInfo: BrowserInfo;
   private readonly inner: SpanProcessor;
+  private readonly ignoreUrls: RegExp[];
 
-  constructor(inner: SpanProcessor, browserInfo: BrowserInfo) {
+  constructor(
+    inner: SpanProcessor,
+    browserInfo: BrowserInfo,
+    options: HaocSpanProcessorOptions = {},
+  ) {
     this.inner = inner;
     this.browserInfo = browserInfo;
+    this.ignoreUrls = options.ignoreUrls ?? [];
+  }
+
+  /**
+   * Returns true when the span should be dropped (not forwarded to the
+   * inner processor). Looks at the `haoc.drop` marker set by the
+   * instrumentation hooks, the span's `http.url` attribute, and the span
+   * name as a last resort.
+   */
+  private shouldDrop(span: Span | ReadableSpan): boolean {
+    const attrs = span.attributes as Record<string, unknown>;
+    if (attrs['haoc.drop'] === true) return true;
+    if (this.ignoreUrls.length === 0) return false;
+    const candidates = [
+      attrs['http.url'],
+      attrs['http.target'],
+      span.name,
+    ];
+    for (const c of candidates) {
+      if (typeof c === 'string' && matchesAny(this.ignoreUrls, c)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   onStart(span: Span, parentContext: Context): void {
+    if (this.shouldDrop(span)) {
+      // We can't truly cancel span creation, but skipping enrichment and
+      // delegating-onStart prevents downstream processors from acting on
+      // it; the matching onEnd also short-circuits export.
+      return;
+    }
+
     // ── Page Context ──────────────────────────────────────────────────
     if (typeof location !== 'undefined') {
       span.setAttribute('page.url', location.pathname + location.search);
@@ -96,6 +141,7 @@ export class HaocSpanProcessor implements SpanProcessor {
   }
 
   onEnd(span: ReadableSpan): void {
+    if (this.shouldDrop(span)) return;
     this.inner.onEnd(span);
   }
 

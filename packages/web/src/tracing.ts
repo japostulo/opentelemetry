@@ -1,5 +1,9 @@
 import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import {
+  BatchSpanProcessor,
+  ParentBasedSampler,
+  TraceIdRatioBasedSampler,
+} from '@opentelemetry/sdk-trace-base';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
@@ -17,6 +21,11 @@ import { CompositePropagator, W3CBaggagePropagator } from '@opentelemetry/core';
 import { detectBrowserInfo, type AppPlatform } from './browser';
 import { HaocSpanProcessor } from './processor';
 import { installErrorHandlers } from './errors';
+import {
+  matchesAny,
+  resolveWebProfile,
+  type HaocWebProfileName,
+} from './profile';
 
 export interface HaocWebConfig {
   /**
@@ -37,39 +46,93 @@ export interface HaocWebConfig {
   environment?: string;
 
   /**
-   * URLs/patterns for which trace context (traceparent/tracestate + baggage)
-   * should be propagated via CORS.
+   * URLs/patterns of your APIs. Used for two purposes:
+   * 1. CORS propagation of trace context (traceparent/baggage headers).
+   * 2. Whitelist for span creation when the active profile sets
+   *    `apiUrlsAsWhitelist=true` (default in `minimal`): fetch/XHR calls
+   *    to URLs that do NOT match are dropped (no span emitted).
    *
-   * Typically your API URLs.
-   *
-   * @example
-   * ```ts
-   * propagateTraceUrls: [
-   *   /https?:\/\/api\.haoc\.net/,
-   *   'http://localhost:3002',
-   * ]
-   * ```
+   * Prefer this field over the legacy `propagateTraceUrls`.
+   */
+  apiUrls?: (string | RegExp)[];
+
+  /**
+   * @deprecated Alias of {@link apiUrls}. Kept for backwards compatibility.
    */
   propagateTraceUrls?: (string | RegExp)[];
 
   /**
-   * Application platform.
-   * Auto-detected if not specified (web-browser, electron).
-   * @default auto-detected
+   * Application platform. Auto-detected if not specified.
    */
   platform?: AppPlatform;
 
   /**
+   * Named profile that selects a noise-reduction baseline:
+   * - `minimal` (default): only fetch/XHR to `apiUrls` + errors.
+   *   Document-load OFF; static assets ignored.
+   * - `standard`: minimal + document-load.
+   * - `verbose`: legacy "everything on" behaviour.
+   *
+   * Overridable via `VITE_OTEL_PROFILE` / `HAOC_OTEL_PROFILE`.
+   */
+  profile?: HaocWebProfileName;
+
+  /**
+   * Head-based sampler ratio for `ParentBased(TraceIdRatioBased)`.
+   * Range 0..1. Defaults to 1.0; the parent-based sampler ensures that
+   * if the frontend samples a trace, the entire distributed trace
+   * (frontend → API → Laravel) is preserved.
+   * Overridable via `VITE_OTEL_SAMPLE_RATIO` / `HAOC_OTEL_SAMPLE_RATIO`.
+   */
+  sampleRatio?: number;
+
+  /**
+   * Extra URL patterns to drop (no span). Strings compiled as case-
+   * insensitive regex. Merged with profile defaults and
+   * `VITE_OTEL_IGNORE_URLS` / `HAOC_OTEL_IGNORE_URLS` (CSV).
+   */
+  ignoreUrls?: (string | RegExp)[];
+
+  /**
+   * Error messages to silently swallow (no span emitted by the global
+   * error handlers). Merged with profile defaults
+   * (`ResizeObserver loop limit exceeded`, `Script error.`, etc.).
+   */
+  ignoreErrorMessages?: (string | RegExp)[];
+
+  /**
    * Enable global error handlers (window.onerror, unhandledrejection).
-   * @default true
+   * Default depends on profile (`true`).
    */
   enableErrorTracking?: boolean;
 
   /**
-   * Enable document load instrumentation (DOMContentLoaded, Load).
-   * @default true
+   * Enable document load instrumentation. Default depends on profile
+   * (`false` in `minimal`, `true` in `standard`/`verbose`).
    */
   enableDocumentLoad?: boolean;
+
+  /**
+   * If true, only fetch/XHR calls whose URL matches `apiUrls` produce
+   * spans. If false, all fetch/XHR calls produce spans (the default in
+   * `standard`/`verbose`). In `minimal` this defaults to `true`.
+   */
+  apiUrlsAsWhitelist?: boolean;
+
+  /**
+   * Optional env source for env-based config resolution. When omitted, we
+   * try `globalThis.process?.env`. Pass `import.meta.env` from Vite if you
+   * want VITE_OTEL_* overrides to work in the browser.
+   *
+   * @example
+   * ```ts
+   * initTracing({
+   *   serviceName: 'my-app',
+   *   env: import.meta.env as Record<string, string | undefined>,
+   * })
+   * ```
+   */
+  env?: Record<string, string | undefined>;
 
   /**
    * Extra resource attributes merged with the defaults.
@@ -81,13 +144,17 @@ export interface HaocWebConfig {
  * Initializes HAOC OpenTelemetry for web frontends.
  *
  * Sets up:
- * - WebTracerProvider with OTLP exporter
- * - Auto-instrumentation for Fetch, XMLHttpRequest, DocumentLoad
- * - Custom SpanProcessor that enriches all spans with page/browser/user context
- * - W3C TraceContext + Baggage propagation
- * - Global error handlers
+ * - WebTracerProvider with OTLP exporter and ParentBased(TraceIdRatio)
+ *   sampler.
+ * - Auto-instrumentation for Fetch, XMLHttpRequest, optionally DocumentLoad.
+ * - URL filtering at instrumentation level (via `applyCustomAttributesOnSpan`
+ *   short-circuit) and at processor level (second-line defense).
+ * - Custom SpanProcessor that enriches all spans with page/browser/user
+ *   context.
+ * - W3C TraceContext + Baggage propagation.
+ * - Global error handlers with ignore-list filtering.
  *
- * Call this BEFORE creating your app (Vue, React, etc.):
+ * Call BEFORE creating your app (Vue, React, etc.).
  *
  * @example
  * ```ts
@@ -96,13 +163,25 @@ export interface HaocWebConfig {
  *   serviceName: 'totem-client',
  *   otlpEndpoint: 'http://signoz.haoc.net:4318/v1/traces',
  *   environment: 'production',
- *   propagateTraceUrls: [/https?:\/\/api\.totem\.haoc/],
+ *   apiUrls: [/https?:\/\/api\.totem\.haoc/],
+ *   env: import.meta.env as Record<string, string | undefined>,
  * });
  * ```
  */
 export function initTracing(config: HaocWebConfig): WebTracerProvider {
   const endpoint = config.otlpEndpoint ?? 'http://localhost:4318/v1/traces';
   const environment = config.environment ?? 'local';
+
+  const resolved = resolveWebProfile({
+    profile: config.profile,
+    sampleRatio: config.sampleRatio,
+    ignoreUrls: config.ignoreUrls,
+    ignoreErrorMessages: config.ignoreErrorMessages,
+    enableDocumentLoad: config.enableDocumentLoad,
+    enableErrorTracking: config.enableErrorTracking,
+    apiUrlsAsWhitelist: config.apiUrlsAsWhitelist,
+    env: config.env,
+  });
 
   // ── Browser Info ────────────────────────────────────────────────────
   const browserInfo = detectBrowserInfo(config.platform);
@@ -116,23 +195,29 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
     'os.name': browserInfo['os.name'],
     'device.type': browserInfo['device.type'],
     'app.platform': browserInfo['app.platform'],
+    'haoc.otel.profile': resolved.profile,
     ...config.additionalResourceAttributes,
   });
 
-  // ── Exporter ────────────────────────────────────────────────────────
-  const exporter = new OTLPTraceExporter({ url: endpoint });
+  // ── Sampler (ParentBased — distributed traces stay coherent) ────────
+  const sampler = new ParentBasedSampler({
+    root: new TraceIdRatioBasedSampler(resolved.sampleRatio),
+  });
 
-  // ── Custom SpanProcessor (wraps BatchSpanProcessor) ─────────────────
+  // ── Exporter & Processor chain ──────────────────────────────────────
+  const exporter = new OTLPTraceExporter({ url: endpoint });
   const batchProcessor = new BatchSpanProcessor(exporter);
-  const haocProcessor = new HaocSpanProcessor(batchProcessor, browserInfo);
+  const haocProcessor = new HaocSpanProcessor(batchProcessor, browserInfo, {
+    ignoreUrls: resolved.ignoreUrls,
+  });
 
   // ── Provider ────────────────────────────────────────────────────────
   const provider = new WebTracerProvider({
     resource,
+    sampler,
     spanProcessors: [haocProcessor],
   });
 
-  // Register with W3C TraceContext + Baggage propagators
   provider.register({
     contextManager: new ZoneContextManager(),
     propagator: new CompositePropagator({
@@ -143,27 +228,70 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
     }),
   });
 
-  // ── Auto-Instrumentations ──────────────────────────────────────────
-  const propagateUrls = config.propagateTraceUrls ?? [];
+  // ── Auto-Instrumentations ───────────────────────────────────────────
+  const apiUrls = config.apiUrls ?? config.propagateTraceUrls ?? [];
+  const apiUrlPatterns = apiUrls.map((u) =>
+    typeof u === 'string' ? new RegExp(u, 'i') : u,
+  );
+
+  /**
+   * Returns true if the URL should be traced (i.e. NOT ignored). When
+   * apiUrlsAsWhitelist is true and apiUrls were given, only matching
+   * URLs are traced.
+   */
+  const shouldTraceUrl = (url: string): boolean => {
+    if (matchesAny(resolved.ignoreUrls, url)) return false;
+    if (resolved.apiUrlsAsWhitelist && apiUrlPatterns.length > 0) {
+      return matchesAny(apiUrlPatterns, url);
+    }
+    return true;
+  };
 
   registerInstrumentations({
     instrumentations: [
       new XMLHttpRequestInstrumentation({
-        propagateTraceHeaderCorsUrls: propagateUrls,
+        propagateTraceHeaderCorsUrls: apiUrls,
+        ignoreUrls: resolved.ignoreUrls,
+        applyCustomAttributesOnSpan: (span, xhr) => {
+          // Second-line defense: when the URL is on the ignore list or
+          // outside the apiUrls whitelist, mark the span so the processor
+          // drops it before export.
+          const url = (xhr as XMLHttpRequest & { responseURL?: string })
+            .responseURL;
+          if (url && !shouldTraceUrl(url)) {
+            span.setAttribute('haoc.drop', true);
+          }
+        },
       }),
       new FetchInstrumentation({
-        propagateTraceHeaderCorsUrls: propagateUrls,
+        propagateTraceHeaderCorsUrls: apiUrls,
+        ignoreUrls: resolved.ignoreUrls,
+        applyCustomAttributesOnSpan: (span, request, _result) => {
+          const url =
+            typeof request === 'string'
+              ? request
+              : (request as Request).url;
+          if (url && !shouldTraceUrl(url)) {
+            span.setAttribute('haoc.drop', true);
+          }
+        },
       }),
-      ...(config.enableDocumentLoad !== false
+      ...(resolved.enableDocumentLoad
         ? [new DocumentLoadInstrumentation()]
         : []),
     ],
   });
 
-  // ── Error Tracking ─────────────────────────────────────────────────
-  if (config.enableErrorTracking !== false) {
-    installErrorHandlers();
+  // ── Error Tracking ──────────────────────────────────────────────────
+  if (resolved.enableErrorTracking) {
+    installErrorHandlers({
+      ignoreErrorMessages: resolved.ignoreErrorMessages,
+    });
   }
 
   return provider;
 }
+
+// Re-export profile helpers so consumers can introspect resolution.
+export { resolveWebProfile, matchesAny } from './profile';
+export type { HaocWebProfileName, ResolvedWebProfile } from './profile';

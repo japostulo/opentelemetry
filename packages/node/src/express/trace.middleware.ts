@@ -10,6 +10,7 @@ import {
 } from '../utils/sanitize';
 import { buildLoggerConfig } from '../logger/config';
 import type { LoggerConfig } from '../logger/types';
+import { getRuntimeProfile, matchesAny } from '../tracing/profile';
 
 export interface TraceMiddlewareOptions {
   /**
@@ -55,7 +56,17 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
     const method: string = req.method;
     const traceId = spanContext?.traceId || 'none';
 
-    const rawBody = hasContent(req.body) ? req.body : undefined;
+    // ── Profile-driven runtime decisions ─────────────────────────────
+    const runtime = getRuntimeProfile();
+    if (matchesAny(runtime.ignoreRoutes, route)) {
+      next();
+      return;
+    }
+    const captureBody = runtime.captureRequestBody;
+    const captureResponse = runtime.captureResponseBody;
+
+    const rawBody =
+      captureBody && hasContent(req.body) ? req.body : undefined;
     const rawQuery = hasContent(req.query) ? req.query : undefined;
     const rawParams = hasContent(req.params) ? req.params : undefined;
 
@@ -107,6 +118,12 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
         'http.status_code': statusCode,
         'http.duration_ms': duration,
       };
+
+      // captureResponse currently controls span-attribute response capture.
+      // Express middleware does not have a parsed response body to flatten
+      // (chunks pass through `res.end`), so we keep the variable referenced
+      // for future expansion and to silence noUnusedLocals.
+      void captureResponse;
 
       if (statusCode >= 400) {
         logger?.error(

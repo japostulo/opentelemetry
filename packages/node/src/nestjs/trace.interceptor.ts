@@ -14,6 +14,7 @@ import { flattenToSpan, flattenToRecord, type AttrRecord } from '../utils/flatte
 import { hasContent } from '../utils/stringify';
 import { DEFAULT_SENSITIVE_FIELDS, mergeSensitiveFields } from '../utils/sanitize';
 import { getUserSpanAttributes } from '../identity';
+import { getRuntimeProfile, matchesAny } from '../tracing/profile';
 
 export interface TraceInterceptorOptions {
   /**
@@ -75,7 +76,21 @@ export class HaocTraceInterceptor implements NestInterceptor {
     const method: string = request.method;
     const traceId = spanContext?.traceId || 'none';
 
-    const rawBody = hasContent(request.body) ? request.body : undefined;
+    // ── Profile-driven runtime decisions ─────────────────────────────
+    const runtime = getRuntimeProfile();
+    if (matchesAny(runtime.ignoreRoutes, route)) {
+      // Route is on the ignore list — pass through without enriching the
+      // span or emitting request/response logs. The HTTP auto-instrumentation
+      // ignoreIncomingRequestHook normally drops the span itself; this is a
+      // belt-and-braces guard for routes registered after the SDK started.
+      return next.handle();
+    }
+
+    const captureBody = runtime.captureRequestBody;
+    const captureResponse = runtime.captureResponseBody;
+
+    const rawBody =
+      captureBody && hasContent(request.body) ? request.body : undefined;
     const rawQuery = hasContent(request.query) ? request.query : undefined;
     const rawParams = hasContent(request.params) ? request.params : undefined;
 
@@ -160,7 +175,11 @@ export class HaocTraceInterceptor implements NestInterceptor {
         if (activeSpan) {
           activeSpan.setAttribute('http.status_code', statusCode);
           activeSpan.setAttribute('http.duration_ms', duration);
-          if (responseBody !== undefined && !isStreamResponse) {
+          if (
+            captureResponse &&
+            responseBody !== undefined &&
+            !isStreamResponse
+          ) {
             flattenToSpan(activeSpan, 'response', responseBody, 0, this.sensitiveFields);
             flattenToRecord(resAttrs, 'response', responseBody, 0, this.sensitiveFields);
           }
