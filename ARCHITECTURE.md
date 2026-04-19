@@ -260,12 +260,12 @@ services:
       - signoz
 ```
 
-Todas as redes `signoz` devem referenciar a rede externa `signoz-shared`:
+Todas as redes `signoz` devem referenciar a rede externa `signoz-net`:
 
 ```yaml
 networks:
   signoz:
-    name: signoz-shared
+    name: signoz-net
     external: true
 ```
 

@@ -191,7 +191,7 @@ services:
 
 networks:
   signoz:
-    name: signoz-shared
+    name: signoz-net
     external: true
 ```
 
