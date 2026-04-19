@@ -1,0 +1,65 @@
+services:
+  nestjs-app:
+    build:
+      context: ..
+      dockerfile: playground/nestjs-app/Dockerfile
+    ports:
+      - "3010:3010"
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4318
+      OTEL_SERVICE_NAME: playground-nestjs
+      OTEL_ENVIRONMENT: playground
+      NODE_ENV: production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - playground
+
+  express-app:
+    build:
+      context: ..
+      dockerfile: playground/express-app/Dockerfile
+    ports:
+      - "3020:3020"
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4318
+      OTEL_SERVICE_NAME: playground-express
+      OTEL_ENVIRONMENT: playground
+      NODE_ENV: production
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - playground
+
+  laravel-app:
+    build:
+      context: ..
+      dockerfile: playground/laravel-app/Dockerfile
+    ports:
+      - "8085:8080"
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4318
+      OTEL_SERVICE_NAME: playground-laravel
+      OTEL_ENVIRONMENT: playground
+      APP_KEY: base64:c2VjdXJlLXBsYXlncm91bmQta2V5LTEyMzQ1Njc4OTA=
+      APP_ENV: local
+      APP_DEBUG: "true"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - playground
+
+  web-app:
+    build:
+      context: ..
+      dockerfile: playground/web-app/Dockerfile
+    ports:
+      - "8090:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - playground
+
+networks:
+  playground:
+    driver: bridge
