@@ -1,3 +1,53 @@
-node_modules
-dist
+# ─── Node / TypeScript ───────────────────────────────────────────────
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Tarballs gerados por `npm pack` (lib publicada vai pelo registry)
 *.tgz
+
+# ─── PHP / Composer ──────────────────────────────────────────────────
+# vendor/ é instalado pelo consumidor; não deve ir pro repositório da lib
+packages/laravel/vendor/
+packages/laravel/composer.lock
+packages/laravel/.phpunit.cache/
+packages/laravel/.phpunit.result.cache
+
+# ─── Testes / cobertura ──────────────────────────────────────────────
+coverage/
+.nyc_output/
+*.lcov
+
+# ─── Playground (artefatos locais, não fonte) ────────────────────────
+playground/**/dist/
+playground/**/node_modules/
+playground/**/vendor/
+playground/**/tmp/
+playground/**/storage/logs/*.log
+playground/**/bootstrap/cache/*.php
+playground/laravel-app/.env
+
+# ─── Editor / SO ─────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ─── Logs / temporários ──────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.tmp/
+tmp/
+
+# ─── Variáveis de ambiente (nunca subir) ─────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ─── Memórias do agente / notas locais ───────────────────────────────
+/memories/
