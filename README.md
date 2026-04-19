@@ -223,3 +223,52 @@ Duas camadas de proteção:
 ## Licença
 
 MIT
+
+---
+
+## Publicação dos Pacotes
+
+### Node (`@haocruz/opentelemetry`) e Web (`@haocruz/opentelemetry-web`) — npm
+
+```bash
+# 1. Build
+npm run build
+
+# 2. Publicar Node
+cd packages/node
+npm publish --access=public --otp=CODIGO_2FA
+
+# 3. Publicar Web
+cd ../web
+npm publish --access=public --otp=CODIGO_2FA
+```
+
+> Requer login no npm (`npm login`) e OTP de 2FA.
+
+### Laravel (`haoc/opentelemetry-laravel`) — Packagist
+
+O pacote Laravel é publicado via subtree split para um repositório dedicado no GitHub, que o Packagist lê automaticamente.
+
+```bash
+# 1. Commite normalmente no monorepo
+git add -A && git commit -m "feat: descrição"
+git push origin master
+
+# 2. Subtree split → branch dedicada
+git subtree split --prefix=packages/laravel -b laravel-split
+
+# 3. Push para o repo do Packagist
+git push laravel-origin laravel-split:master --force
+
+# 4. Tag de versão
+git tag vX.Y.Z laravel-split
+git push laravel-origin vX.Y.Z
+```
+
+### Resumo dos registros
+
+| Pacote | Registry | URL |
+|---|---|---|
+| `@haocruz/opentelemetry` | npm | https://www.npmjs.com/package/@haocruz/opentelemetry |
+| `@haocruz/opentelemetry-web` | npm | https://www.npmjs.com/package/@haocruz/opentelemetry-web |
+| `haoc/opentelemetry-laravel` | Packagist | https://packagist.org/packages/haoc/opentelemetry-laravel |

@@ -177,7 +177,7 @@ O backend (@haocruz/opentelemetry ou haoc/opentelemetry-laravel) extrai esses va
 
 ## Docker / Vite
 
-Para desenvolvimento local com Docker e Vite:
+Para desenvolvimento com Docker e Vite, basta que o container tenha acesso à rede do SigNoz:
 
 ```yaml
 # docker-compose.yml
@@ -185,7 +185,6 @@ services:
   node:
     volumes:
       - .:/app
-      - ../haoc-opentelemetry/packages/web:/app/node_modules/@haocruz/opentelemetry-web
     networks:
       - app
       - signoz
@@ -195,6 +194,12 @@ networks:
     name: signoz-shared
     external: true
 ```
+
+> **Desenvolvimento local**: Para testar alterações na lib antes de publicar, adicione um volume mount:
+> ```yaml
+> volumes:
+>   - ../haoc-opentelemetry/packages/web:/app/node_modules/@haocruz/opentelemetry-web
+> ```
 
 ## Variáveis de Ambiente (Vite)
 
