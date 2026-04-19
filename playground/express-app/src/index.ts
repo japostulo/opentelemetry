@@ -1,6 +1,11 @@
 import { setupTracing, trace, context } from '@haocruz/opentelemetry';
 
-setupTracing({ serviceName: 'playground-express' });
+setupTracing({
+  serviceName: 'playground-express',
+  // Exercise the new minimal profile so /favicon.ico, /health and static
+  // assets are dropped by the SDK before reaching SigNoz.
+  profile: 'minimal',
+});
 
 import express from 'express';
 import { createTraceMiddleware, createPinoMiddleware } from '@haocruz/opentelemetry/express';
