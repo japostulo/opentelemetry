@@ -11,9 +11,16 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
-    "clean": "npm run clean --workspaces"
+    "clean": "npm run clean --workspaces",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "typescript": "^5.3.0"
+    "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "happy-dom": "^14.12.3",
+    "typescript": "^5.3.0",
+    "vitest": "^1.6.0"
   }
 }
