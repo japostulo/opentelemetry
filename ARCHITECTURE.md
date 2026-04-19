@@ -8,8 +8,8 @@ Monorepo de bibliotecas de observabilidade padronizadas do Hospital Alemão Oswa
 
 | Pacote | Linguagem | Target | Versão |
 |---|---|---|---|
-| [`@haoc/opentelemetry`](packages/node/README.md) | TypeScript | Node.js (NestJS / Express) | 1.1.0 |
-| [`@haoc/opentelemetry-web`](packages/web/README.md) | TypeScript | Web (Vue / React / Electron) | 1.0.0 |
+| [`@haocruz/opentelemetry`](packages/node/README.md) | TypeScript | Node.js (NestJS / Express) | 1.1.0 |
+| [`@haocruz/opentelemetry-web`](packages/web/README.md) | TypeScript | Web (Vue / React / Electron) | 1.0.0 |
 | [`haoc/opentelemetry-laravel`](packages/laravel/README.md) | PHP | Laravel 11+ | 1.0.0 |
 
 ## Diagrama de Arquitetura
@@ -18,14 +18,14 @@ Monorepo de bibliotecas de observabilidade padronizadas do Hospital Alemão Oswa
 graph TB
     subgraph Frontend ["🖥️ Frontend (Electron / Browser)"]
         VUE["Vue 3 App"]
-        WEB_LIB["@haoc/opentelemetry-web"]
+        WEB_LIB["@haocruz/opentelemetry-web"]
         VUE --> WEB_LIB
         WEB_LIB -->|"Fetch/XHR<br/>traceparent + baggage"| API_GW
     end
 
     subgraph Backend_Node ["⚙️ Backend Node.js (NestJS)"]
         API_GW["API Gateway<br/>NestJS"]
-        NODE_LIB["@haoc/opentelemetry"]
+        NODE_LIB["@haocruz/opentelemetry"]
         API_GW --> NODE_LIB
     end
 
@@ -54,9 +54,9 @@ graph TB
 sequenceDiagram
     participant U as 👤 Usuário
     participant F as 🖥️ Frontend<br/>(Vue/Electron)
-    participant W as @haoc/opentelemetry-web
+    participant W as @haocruz/opentelemetry-web
     participant N as ⚙️ API Node<br/>(NestJS)
-    participant H as @haoc/opentelemetry
+    participant H as @haocruz/opentelemetry
     participant L as 📦 API Laravel
     participant P as haoc/opentelemetry-laravel
     participant S as 📊 SigNoz
@@ -182,7 +182,7 @@ haoc-opentelemetry/
 ├── docker-compose.yml        # Build container + volumes
 │
 ├── packages/
-│   ├── node/                 # @haoc/opentelemetry
+│   ├── node/                 # @haocruz/opentelemetry
 │   │   ├── src/
 │   │   │   ├── index.ts              # Barrel exports (core)
 │   │   │   ├── tracing/              # setupTracing(), config
@@ -199,7 +199,7 @@ haoc-opentelemetry/
 │   │   ├── package.json
 │   │   └── README.md
 │   │
-│   ├── web/                  # @haoc/opentelemetry-web
+│   ├── web/                  # @haocruz/opentelemetry-web
 │   │   ├── src/
 │   │   │   ├── index.ts              # Barrel exports
 │   │   │   ├── tracing.ts            # initTracing()
@@ -231,7 +231,7 @@ haoc-opentelemetry/
 services:
   node:
     volumes:
-      - ../haoc-opentelemetry/packages/node:/var/www/node_modules/@haoc/opentelemetry
+      - ../haoc-opentelemetry/packages/node:/var/www/node_modules/@haocruz/opentelemetry
     networks:
       - signoz
 ```
@@ -243,7 +243,7 @@ services:
 services:
   node:
     volumes:
-      - ../haoc-opentelemetry/packages/web:/app/node_modules/@haoc/opentelemetry-web
+      - ../haoc-opentelemetry/packages/web:/app/node_modules/@haocruz/opentelemetry-web
     networks:
       - signoz
 ```
@@ -282,7 +282,7 @@ docker compose up --build -d
 
 ```typescript
 // main.ts
-import { setupTracing } from '@haoc/opentelemetry';
+import { setupTracing } from '@haocruz/opentelemetry';
 setupTracing({ serviceName: 'minha-api' });
 ```
 
@@ -295,7 +295,7 @@ export class AppModule {}
 ### 3. Frontend Vue (1 chamada)
 
 ```typescript
-import { initTracing } from '@haoc/opentelemetry-web';
+import { initTracing } from '@haocruz/opentelemetry-web';
 initTracing({ serviceName: 'meu-app', otlpEndpoint: '...' });
 ```
 

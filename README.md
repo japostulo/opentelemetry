@@ -1,4 +1,4 @@
-# @haoc/opentelemetry
+# @haocruz/opentelemetry
 
 Biblioteca de observabilidade padronizada do HAOC para backends Node.js — tracing, métricas e logs estruturados via OpenTelemetry + Pino.
 
@@ -16,7 +16,7 @@ Biblioteca de observabilidade padronizada do HAOC para backends Node.js — trac
 ## Instalação
 
 ```bash
-npm install @haoc/opentelemetry
+npm install @haocruz/opentelemetry
 ```
 
 Todas as dependências de OpenTelemetry, Pino e nestjs-pino já estão embarcadas na lib. Não é necessário instalar peer dependencies adicionais para OTel/Pino.
@@ -43,11 +43,11 @@ npm install -D pino-pretty
 
 ```typescript
 // main.ts — PRIMEIRA LINHA do arquivo
-import { setupTracing } from '@haoc/opentelemetry';
+import { setupTracing } from '@haocruz/opentelemetry';
 setupTracing({ serviceName: 'minha-api' });
 
 import { NestFactory } from '@nestjs/core';
-import { configureHaocApp } from '@haoc/opentelemetry/nestjs';
+import { configureHaocApp } from '@haocruz/opentelemetry/nestjs';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -65,7 +65,7 @@ bootstrap();
 ```typescript
 // app.module.ts
 import { Module } from '@nestjs/common';
-import { HaocLoggerModule } from '@haoc/opentelemetry/nestjs';
+import { HaocLoggerModule } from '@haocruz/opentelemetry/nestjs';
 
 @Module({
   imports: [HaocLoggerModule.forRoot()],
@@ -86,11 +86,11 @@ O `HaocLoggerModule.forRoot()` auto-registra:
 
 ```typescript
 // app.ts — PRIMEIRA LINHA do arquivo
-import { setupTracing } from '@haoc/opentelemetry';
+import { setupTracing } from '@haocruz/opentelemetry';
 setupTracing({ serviceName: 'minha-api-express' });
 
 import express from 'express';
-import { createPinoMiddleware, createTraceMiddleware } from '@haoc/opentelemetry/express';
+import { createPinoMiddleware, createTraceMiddleware } from '@haocruz/opentelemetry/express';
 
 const app = express();
 
@@ -165,7 +165,7 @@ HaocLoggerModule.forRoot({
 ### configureHaocApp(app, options?)
 
 ```typescript
-import { configureHaocApp } from '@haoc/opentelemetry/nestjs';
+import { configureHaocApp } from '@haocruz/opentelemetry/nestjs';
 
 configureHaocApp(app, {
   corsOrigin: true, // boolean | string | string[]
@@ -190,7 +190,7 @@ HaocLoggerModule.forRoot({ disableTraceInterceptor: true })
 
 ```typescript
 // Core — tracing, logger config, utilities
-import { setupTracing, buildLoggerConfig, flattenToSpan } from '@haoc/opentelemetry';
+import { setupTracing, buildLoggerConfig, flattenToSpan } from '@haocruz/opentelemetry';
 
 // NestJS — módulo, interceptor, bootstrap helper, tipos
 import {
@@ -200,12 +200,12 @@ import {
   HAOC_CORS_CONFIG,
   HAOC_SENSITIVE_FIELDS,
   PinoLogger,
-} from '@haoc/opentelemetry/nestjs';
+} from '@haocruz/opentelemetry/nestjs';
 // Tipos
-import type { HaocModuleConfig, HaocAppOptions, HaocCorsConfig } from '@haoc/opentelemetry/nestjs';
+import type { HaocModuleConfig, HaocAppOptions, HaocCorsConfig } from '@haocruz/opentelemetry/nestjs';
 
 // Express — middleware
-import { createTraceMiddleware, createPinoMiddleware } from '@haoc/opentelemetry/express';
+import { createTraceMiddleware, createPinoMiddleware } from '@haocruz/opentelemetry/express';
 ```
 
 ## Dados Sensíveis (Redação Automática)

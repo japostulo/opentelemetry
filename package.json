@@ -1,5 +1,5 @@
 {
-  "name": "@haoc/opentelemetry-workspace",
+  "name": "@haocruz/opentelemetry-workspace",
   "version": "1.0.0",
   "private": true,
   "description": "HAOC OpenTelemetry monorepo — standardized observability for Node.js and Web",

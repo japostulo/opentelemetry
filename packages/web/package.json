@@ -1,5 +1,5 @@
 {
-  "name": "@haoc/opentelemetry-web",
+  "name": "@haocruz/opentelemetry-web",
   "version": "1.0.0",
   "description": "HAOC OpenTelemetry for web frontends — automatic page tracking, browser/device detection, user identity, and distributed tracing",
   "author": "Hospital Alemão Oswaldo Cruz",

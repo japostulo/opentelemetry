@@ -27,8 +27,8 @@ export interface TraceMiddlewareOptions {
  * @example
  * ```ts
  * import express from 'express';
- * import { setupTracing } from '@haoc/opentelemetry';
- * import { createTraceMiddleware, createPinoMiddleware } from '@haoc/opentelemetry/express';
+ * import { setupTracing } from '@haocruz/opentelemetry';
+ * import { createTraceMiddleware, createPinoMiddleware } from '@haocruz/opentelemetry/express';
  *
  * setupTracing({ serviceName: 'my-express-api' });
  *

@@ -86,7 +86,7 @@ export function configureHaocApp(
  *
  * @example
  * ```ts
- * import { bootstrapHaocApp } from '@haoc/opentelemetry/nestjs';
+ * import { bootstrapHaocApp } from '@haocruz/opentelemetry/nestjs';
  * import { AppModule } from './app.module';
  *
  * bootstrapHaocApp(AppModule, { serviceName: 'totem-api' });

@@ -56,7 +56,7 @@ export function installErrorHandlers(): void {
  *
  * @example
  * ```ts
- * import { createVueErrorHandler } from '@haoc/opentelemetry-web';
+ * import { createVueErrorHandler } from '@haocruz/opentelemetry-web';
  * app.config.errorHandler = createVueErrorHandler();
  * ```
  */

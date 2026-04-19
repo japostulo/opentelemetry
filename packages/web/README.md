@@ -1,4 +1,4 @@
-# @haoc/opentelemetry-web
+# @haocruz/opentelemetry-web
 
 Biblioteca de observabilidade padronizada do HAOC para frontends web — tracing distribuído, detecção de browser/dispositivo, identidade de usuário e propagação de contexto via W3C Baggage.
 
@@ -16,7 +16,7 @@ Biblioteca de observabilidade padronizada do HAOC para frontends web — tracing
 ## Instalação
 
 ```bash
-npm install @haoc/opentelemetry-web
+npm install @haocruz/opentelemetry-web
 ```
 
 Todas as dependências do OpenTelemetry para web já estão embarcadas. Não é necessário instalar `@opentelemetry/*` separadamente.
@@ -27,7 +27,7 @@ Todas as dependências do OpenTelemetry para web já estão embarcadas. Não é 
 
 ```typescript
 // main.ts — PRIMEIRA LINHA
-import { initTracing } from '@haoc/opentelemetry-web';
+import { initTracing } from '@haocruz/opentelemetry-web';
 
 initTracing({
   serviceName: 'totem-client',
@@ -43,7 +43,7 @@ initTracing({
 ### 2. Integrar com Vue Router (page tracking)
 
 ```typescript
-import { setCurrentRoute } from '@haoc/opentelemetry-web';
+import { setCurrentRoute } from '@haocruz/opentelemetry-web';
 import router from './router';
 
 router.afterEach((to) => {
@@ -54,7 +54,7 @@ router.afterEach((to) => {
 ### 3. Integrar com Vue Error Handler
 
 ```typescript
-import { createVueErrorHandler } from '@haoc/opentelemetry-web';
+import { createVueErrorHandler } from '@haocruz/opentelemetry-web';
 
 const app = createApp(App);
 app.config.errorHandler = createVueErrorHandler();
@@ -63,7 +63,7 @@ app.config.errorHandler = createVueErrorHandler();
 ### 4. Identificar o usuário (após login)
 
 ```typescript
-import { setUser, clearUser } from '@haoc/opentelemetry-web';
+import { setUser, clearUser } from '@haocruz/opentelemetry-web';
 
 // Após login
 setUser({ id: 'PAC12345', role: 'patient', type: 'authenticated' });
@@ -76,7 +76,7 @@ clearUser();
 
 ```typescript
 // main.ts
-import { initTracing } from '@haoc/opentelemetry-web';
+import { initTracing } from '@haocruz/opentelemetry-web';
 
 initTracing({
   serviceName: 'totem-client',
@@ -90,7 +90,7 @@ initTracing({
 import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
-import { setCurrentRoute, createVueErrorHandler } from '@haoc/opentelemetry-web';
+import { setCurrentRoute, createVueErrorHandler } from '@haocruz/opentelemetry-web';
 
 router.afterEach((to) => {
   setCurrentRoute(String(to.name ?? ''), to.path);
@@ -173,7 +173,7 @@ O `HaocSpanProcessor` injeta automaticamente no cabeçalho `baggage` HTTP:
 - `browser.name`, `device.type`, `app.platform`
 - `haoc.user.id`
 
-O backend (@haoc/opentelemetry ou haoc/opentelemetry-laravel) extrai esses valores e adiciona nos spans do servidor.
+O backend (@haocruz/opentelemetry ou haoc/opentelemetry-laravel) extrai esses valores e adiciona nos spans do servidor.
 
 ## Docker / Vite
 
@@ -185,7 +185,7 @@ services:
   node:
     volumes:
       - .:/app
-      - ../haoc-opentelemetry/packages/web:/app/node_modules/@haoc/opentelemetry-web
+      - ../haoc-opentelemetry/packages/web:/app/node_modules/@haocruz/opentelemetry-web
     networks:
       - app
       - signoz

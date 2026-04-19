@@ -91,7 +91,7 @@ export interface HaocWebConfig {
  *
  * @example
  * ```ts
- * import { initTracing } from '@haoc/opentelemetry-web';
+ * import { initTracing } from '@haocruz/opentelemetry-web';
  * initTracing({
  *   serviceName: 'totem-client',
  *   otlpEndpoint: 'http://signoz.haoc.net:4318/v1/traces',

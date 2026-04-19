@@ -54,7 +54,7 @@ function resolveOtlpEndpoint(configEndpoint?: string): string {
  * @example
  * ```ts
  * // main.ts — first line
- * import { setupTracing } from '@haoc/opentelemetry';
+ * import { setupTracing } from '@haocruz/opentelemetry';
  * setupTracing({ serviceName: 'my-api' });
  * ```
  */
