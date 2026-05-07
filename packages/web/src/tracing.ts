@@ -204,11 +204,27 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
     root: new TraceIdRatioBasedSampler(resolved.sampleRatio),
   });
 
+  // ── API URL patterns (used by processor + instrumentation hooks) ────
+  const apiUrls = config.apiUrls ?? config.propagateTraceUrls ?? [];
+  const apiUrlPatterns = apiUrls.map((u) =>
+    typeof u === 'string' ? new RegExp(u, 'i') : u,
+  );
+
+  const shouldTraceUrl = (url: string): boolean => {
+    if (matchesAny(resolved.ignoreUrls, url)) return false;
+    if (resolved.apiUrlsAsWhitelist && apiUrlPatterns.length > 0) {
+      return matchesAny(apiUrlPatterns, url);
+    }
+    return true;
+  };
+
   // ── Exporter & Processor chain ──────────────────────────────────────
   const exporter = new OTLPTraceExporter({ url: endpoint });
   const batchProcessor = new BatchSpanProcessor(exporter);
   const haocProcessor = new HaocSpanProcessor(batchProcessor, browserInfo, {
     ignoreUrls: resolved.ignoreUrls,
+    apiUrls: apiUrlPatterns,
+    apiUrlsAsWhitelist: resolved.apiUrlsAsWhitelist,
   });
 
   // ── Provider ────────────────────────────────────────────────────────
@@ -229,24 +245,6 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
   });
 
   // ── Auto-Instrumentations ───────────────────────────────────────────
-  const apiUrls = config.apiUrls ?? config.propagateTraceUrls ?? [];
-  const apiUrlPatterns = apiUrls.map((u) =>
-    typeof u === 'string' ? new RegExp(u, 'i') : u,
-  );
-
-  /**
-   * Returns true if the URL should be traced (i.e. NOT ignored). When
-   * apiUrlsAsWhitelist is true and apiUrls were given, only matching
-   * URLs are traced.
-   */
-  const shouldTraceUrl = (url: string): boolean => {
-    if (matchesAny(resolved.ignoreUrls, url)) return false;
-    if (resolved.apiUrlsAsWhitelist && apiUrlPatterns.length > 0) {
-      return matchesAny(apiUrlPatterns, url);
-    }
-    return true;
-  };
-
   registerInstrumentations({
     instrumentations: [
       new XMLHttpRequestInstrumentation({
@@ -260,6 +258,18 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
             .responseURL;
           if (url && !shouldTraceUrl(url)) {
             span.setAttribute('haoc.drop', true);
+            return;
+          }
+          // Enrich span name with path (default OTel name is just the method).
+          if (url) {
+            try {
+              const parsed = new URL(url);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const method: string = (span as any).attributes?.['http.method'] ?? 'GET';
+              span.updateName(`${method} ${parsed.pathname}`);
+            } catch {
+              // ignore URL parsing errors
+            }
           }
         },
       }),
@@ -273,6 +283,20 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
               : (request as Request).url;
           if (url && !shouldTraceUrl(url)) {
             span.setAttribute('haoc.drop', true);
+            return;
+          }
+          // Enrich span name with path (default OTel name is just the method).
+          if (url) {
+            try {
+              const parsed = new URL(url);
+              const method =
+                typeof request !== 'string'
+                  ? (request as Request).method || 'GET'
+                  : 'GET';
+              span.updateName(`${method} ${parsed.pathname}`);
+            } catch {
+              // ignore URL parsing errors
+            }
           }
         },
       }),

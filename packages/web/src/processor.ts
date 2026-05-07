@@ -10,6 +10,19 @@ export interface HaocSpanProcessorOptions {
    * against `http.url`, `http.target`, and the span name.
    */
   ignoreUrls?: RegExp[];
+
+  /**
+   * API URL patterns. When `apiUrlsAsWhitelist` is true, only spans
+   * whose `http.url` matches one of these patterns are kept; all others
+   * are dropped.
+   */
+  apiUrls?: RegExp[];
+
+  /**
+   * When true (default in `minimal` profile), spans whose URL does NOT
+   * match `apiUrls` are silently dropped.
+   */
+  apiUrlsAsWhitelist?: boolean;
 }
 
 // ── Module-level Route State ────────────────────────────────────────────
@@ -46,6 +59,8 @@ export class HaocSpanProcessor implements SpanProcessor {
   private readonly browserInfo: BrowserInfo;
   private readonly inner: SpanProcessor;
   private readonly ignoreUrls: RegExp[];
+  private readonly apiUrls: RegExp[];
+  private readonly apiUrlsAsWhitelist: boolean;
 
   constructor(
     inner: SpanProcessor,
@@ -55,6 +70,8 @@ export class HaocSpanProcessor implements SpanProcessor {
     this.inner = inner;
     this.browserInfo = browserInfo;
     this.ignoreUrls = options.ignoreUrls ?? [];
+    this.apiUrls = options.apiUrls ?? [];
+    this.apiUrlsAsWhitelist = options.apiUrlsAsWhitelist ?? false;
   }
 
   /**
@@ -66,17 +83,27 @@ export class HaocSpanProcessor implements SpanProcessor {
   private shouldDrop(span: Span | ReadableSpan): boolean {
     const attrs = span.attributes as Record<string, unknown>;
     if (attrs['haoc.drop'] === true) return true;
-    if (this.ignoreUrls.length === 0) return false;
-    const candidates = [
-      attrs['http.url'],
-      attrs['http.target'],
-      span.name,
-    ];
-    for (const c of candidates) {
-      if (typeof c === 'string' && matchesAny(this.ignoreUrls, c)) {
+
+    // URL-based filtering
+    const httpUrl = (attrs['http.url'] ?? attrs['url.full']) as string | undefined;
+
+    // Ignore-list check
+    if (this.ignoreUrls.length > 0) {
+      const candidates = [httpUrl, attrs['http.target'] as string | undefined, span.name];
+      for (const c of candidates) {
+        if (typeof c === 'string' && matchesAny(this.ignoreUrls, c)) {
+          return true;
+        }
+      }
+    }
+
+    // Whitelist check: drop spans for URLs NOT matching apiUrls
+    if (this.apiUrlsAsWhitelist && this.apiUrls.length > 0 && httpUrl) {
+      if (!matchesAny(this.apiUrls, httpUrl)) {
         return true;
       }
     }
+
     return false;
   }
 
@@ -142,6 +169,24 @@ export class HaocSpanProcessor implements SpanProcessor {
 
   onEnd(span: ReadableSpan): void {
     if (this.shouldDrop(span)) return;
+
+    // ── Enrich span name with HTTP path ─────────────────────────────
+    // OTel default for XHR/fetch is just the method ("GET", "POST").
+    // We upgrade to "METHOD /path" using http.url when available.
+    const attrs = span.attributes;
+    const httpUrl = attrs['http.url'] as string | undefined;
+    if (httpUrl && /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(span.name)) {
+      try {
+        const parsed = new URL(httpUrl);
+        // ReadableSpan is read-only, but the underlying Span object is
+        // still mutable at this point (before the batch export flushes).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (span as any).name = `${span.name} ${parsed.pathname}`;
+      } catch {
+        // ignore URL parsing errors
+      }
+    }
+
     this.inner.onEnd(span);
   }
 
