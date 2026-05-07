@@ -22,6 +22,8 @@ export default defineConfig({
       reporter: ['text', 'lcov', 'html'],
       include: [
         'packages/node/src/tracing/profile.ts',
+        'packages/node/src/utils/flatten.ts',
+        'packages/node/src/utils/sanitize.ts',
         'packages/web/src/profile.ts',
         'packages/web/src/processor.ts',
         'packages/web/src/errors.ts',

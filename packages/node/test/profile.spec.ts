@@ -127,7 +127,10 @@ describe('resolveProfile — named profiles', () => {
     expect(p.profile).toBe('minimal');
     expect(p.captureRequestBody).toBe(false);
     expect(p.captureResponseBody).toBe(false);
-    expect(p.expressIgnoreLayers).toEqual(['middleware', 'router']);
+    // minimal deve ter logBody OFF — sem body nos logs ou spans
+    expect(p.logRequestBody).toBe(false);
+    expect(p.logResponseBody).toBe(false);
+    expect(p.expressIgnoreLayers).toEqual(['middleware', 'router', 'request_handler']);
     expect(p.instrumentations.fs).toBe(false);
     expect(p.instrumentations.http).toBe(true);
     expect(p.instrumentations.pg).toBe(true);
@@ -171,7 +174,7 @@ describe('resolveProfile — named profiles', () => {
     expect(p.profile).toBe('bogus');
     // ... but the baseline used must be minimal's.
     expect(p.captureRequestBody).toBe(false);
-    expect(p.expressIgnoreLayers).toEqual(['middleware', 'router']);
+    expect(p.expressIgnoreLayers).toEqual(['middleware', 'router', 'request_handler']);
   });
 });
 
