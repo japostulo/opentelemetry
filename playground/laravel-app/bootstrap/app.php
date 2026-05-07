@@ -11,6 +11,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->api(prepend: [
+            \App\Http\Middleware\RuntimeConfigMiddleware::class,
             \Haoc\OpenTelemetry\Middleware\TraceRequest::class,
         ]);
     })

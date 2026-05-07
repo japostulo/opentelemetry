@@ -3,13 +3,20 @@ services:
     build:
       context: ..
       dockerfile: playground/nestjs-app/Dockerfile
+    command: npm run dev
     ports:
       - "3010:3010"
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4318
       OTEL_SERVICE_NAME: playground-nestjs
       OTEL_ENVIRONMENT: playground
-      NODE_ENV: production
+      NODE_ENV: development
+      HAOC_OTEL_PROFILE: ${HAOC_OTEL_PROFILE:-standard}
+      HAOC_OTEL_CAPTURE_BODY: ${HAOC_OTEL_CAPTURE_BODY:-}
+      HAOC_OTEL_CAPTURE_RESPONSE: ${HAOC_OTEL_CAPTURE_RESPONSE:-}
+      LOG_DESTINATION: ${LOG_DESTINATION:-both}
+    volumes:
+      - ./nestjs-app/src:/app/src
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -19,13 +26,20 @@ services:
     build:
       context: ..
       dockerfile: playground/express-app/Dockerfile
+    command: npm run dev
     ports:
       - "3020:3020"
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4318
       OTEL_SERVICE_NAME: playground-express
       OTEL_ENVIRONMENT: playground
-      NODE_ENV: production
+      NODE_ENV: development
+      HAOC_OTEL_PROFILE: ${HAOC_OTEL_PROFILE:-standard}
+      HAOC_OTEL_CAPTURE_BODY: ${HAOC_OTEL_CAPTURE_BODY:-}
+      HAOC_OTEL_CAPTURE_RESPONSE: ${HAOC_OTEL_CAPTURE_RESPONSE:-}
+      LOG_DESTINATION: ${LOG_DESTINATION:-both}
+    volumes:
+      - ./express-app/src:/app/src
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -44,6 +58,10 @@ services:
       APP_KEY: base64:c2VjdXJlLXBsYXlncm91bmQta2V5LTEyMzQ1Njc4OTA=
       APP_ENV: local
       APP_DEBUG: "true"
+      HAOC_OTEL_PROFILE: ${HAOC_OTEL_PROFILE:-standard}
+      HAOC_OTEL_CAPTURE_BODY: ${HAOC_OTEL_CAPTURE_BODY:-}
+      HAOC_OTEL_CAPTURE_RESPONSE: ${HAOC_OTEL_CAPTURE_RESPONSE:-}
+      LOG_DESTINATION: ${LOG_DESTINATION:-both}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -53,8 +71,16 @@ services:
     build:
       context: ..
       dockerfile: playground/web-app/Dockerfile
+      target: dev
+    command: npm run dev -- --host 0.0.0.0 --port 8090
     ports:
-      - "8090:80"
+      - "8090:8090"
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ./web-app/src:/app/src
+      - ./web-app/index.html:/app/index.html
+      - ./web-app/vite.config.ts:/app/vite.config.ts
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

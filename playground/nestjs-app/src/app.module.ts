@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { HaocLoggerModule } from '@haocruz/opentelemetry/nestjs';
 import { AppController } from './app.controller';
+import { AdminController } from './admin.controller';
 
 @Module({
   imports: [
@@ -8,6 +9,6 @@ import { AppController } from './app.controller';
       extraSensitiveFields: ['cpf', 'rg'],
     }),
   ],
-  controllers: [AppController],
+  controllers: [AppController, AdminController],
 })
 export class AppModule {}

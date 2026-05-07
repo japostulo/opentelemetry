@@ -25,6 +25,21 @@ COPY playground/web-app/src/ ./src/
 RUN npx vite build
 
 # -------------------------------------------------------------------
+FROM node:20-slim AS dev
+
+WORKDIR /app
+
+COPY playground/web-app/package.json playground/web-app/tsconfig.json playground/web-app/vite.config.ts playground/web-app/index.html ./
+COPY --from=lib-builder /build/packages/web/haocruz-opentelemetry-web-*.tgz /tmp/lib.tgz
+
+RUN npm install /tmp/lib.tgz && npm install && rm /tmp/lib.tgz
+
+COPY playground/web-app/src/ ./src/
+
+EXPOSE 8090
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8090"]
+
+# -------------------------------------------------------------------
 FROM nginx:alpine
 
 COPY playground/web-app/nginx.conf /etc/nginx/conf.d/default.conf
