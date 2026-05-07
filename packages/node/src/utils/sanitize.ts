@@ -13,6 +13,12 @@ export const DEFAULT_SENSITIVE_FIELDS = new Set([
   'db_password',
   'network_password',
   'tasy_password',
+  // PT-BR / HAOC PII
+  'cpf',
+  'rg',
+  'cnpj',
+  'cartao_sus',
+  'cns',
 ]);
 
 /**
@@ -41,4 +47,31 @@ export function mergeSensitiveFields(
     for (const f of extra) merged.add(f.toLowerCase());
   }
   return merged;
+}
+
+/**
+ * Deep-sanitizes an object, replacing sensitive field values with '[REDACTED]'
+ * while preserving the nested structure (unlike flattenToRecord which flattens).
+ * Arrays are walked recursively; non-object/array values are returned as-is.
+ */
+export function sanitizeNested(
+  data: unknown,
+  sensitiveFields: Set<string> = DEFAULT_SENSITIVE_FIELDS,
+  depth = 0,
+): unknown {
+  if (depth > 4) return '[MAX_DEPTH]';
+  if (data === null || data === undefined) return data;
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeNested(item, sensitiveFields, depth + 1));
+  }
+  if (typeof data === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+      result[key] = isSensitive(key, sensitiveFields)
+        ? '[REDACTED]'
+        : sanitizeNested(value, sensitiveFields, depth + 1);
+    }
+    return result;
+  }
+  return data;
 }
