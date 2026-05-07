@@ -27,20 +27,28 @@ class HaocOpenTelemetryServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__ . '/../config/haoc-otel.php', 'haoc-otel');
 
-        // ── Profile (resolved once) ──────────────────────────────────────
-        $this->app->singleton(Profile::class, function () {
+        // ── Profile (resolved per-resolution so runtime config changes
+        //    via Config::set() take effect on the very next request — the
+        //    TraceRequest middleware re-resolves Profile on every handle()
+        //    because the container builds the middleware fresh per
+        //    request).
+        $this->app->bind(Profile::class, function () {
             return Profile::fromConfig(config('haoc-otel'));
         });
 
+        // NOTE: `haoc.otel.profile` is intentionally NOT included as a
+        // resource attribute. The active profile can change at runtime
+        // via /admin/config and Resource attrs are immutable post-init;
+        // we want every span/log to carry the *current* profile. The
+        // attribute is therefore applied per-span by `TraceRequest`
+        // middleware and per-log by `OtelHandler::write()`.
         $this->app->singleton('otel.resource', function ($app) {
             $config = config('haoc-otel');
-            $profile = $app->make(Profile::class);
 
             return ResourceInfo::create(Attributes::create([
                 ResourceAttributes::SERVICE_NAME => $config['service_name'],
                 'deployment.environment' => $config['environment'],
                 'service.version' => config('app.version', '0.0.0'),
-                'haoc.otel.profile' => $profile->get('profile'),
             ]));
         });
 

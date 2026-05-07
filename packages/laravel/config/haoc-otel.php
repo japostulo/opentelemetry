@@ -85,5 +85,7 @@ return [
     'sensitive_fields' => [
         'password', 'senha', 'secret', 'token', 'access_token',
         'refresh_token', 'authorization', 'db_password', 'tasy_password',
+        // PT-BR / HAOC PII
+        'cpf', 'rg', 'cnpj', 'cartao_sus', 'cns',
     ],
 ];

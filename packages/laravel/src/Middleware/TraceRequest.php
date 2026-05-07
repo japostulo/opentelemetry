@@ -6,9 +6,12 @@ use Closure;
 use Haoc\OpenTelemetry\Profile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use OpenTelemetry\API\Baggage\Propagation\BaggagePropagator;
+use OpenTelemetry\API\Trace\Propagation\TraceContextPropagator;
 use OpenTelemetry\API\Trace\SpanKind;
 use OpenTelemetry\API\Trace\StatusCode;
 use OpenTelemetry\API\Trace\TracerInterface;
+use OpenTelemetry\Context\Propagation\MultiTextMapPropagator;
 use Symfony\Component\HttpFoundation\Response;
 
 class TraceRequest
@@ -18,6 +21,8 @@ class TraceRequest
         private Profile $profile,
     ) {
     }
+
+    private const MAX_RESPONSE_BODY_SIZE = 10 * 1024; // 10KB
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -37,8 +42,17 @@ class TraceRequest
 
         $sensitiveFields = config('haoc-otel.sensitive_fields', []);
 
+        // Extract W3C trace context + baggage from incoming request so this
+        // span is correctly parented within the distributed trace.
+        $propagator = new MultiTextMapPropagator([
+            TraceContextPropagator::getInstance(),
+            BaggagePropagator::getInstance(),
+        ]);
+        $parentContext = $propagator->extract($request->headers->all());
+
         $span = $this->tracer->spanBuilder($spanName)
             ->setSpanKind(SpanKind::KIND_SERVER)
+            ->setParent($parentContext)
             ->startSpan();
 
         $scope = $span->activate();
@@ -48,6 +62,8 @@ class TraceRequest
         $span->setAttribute('http.url', $request->fullUrl());
         $span->setAttribute('http.target', $request->getRequestUri());
         $span->setAttribute('environment', config('haoc-otel.environment'));
+        // Stamped per-request so runtime /admin/config flips reflect immediately.
+        $span->setAttribute('haoc.otel.profile', (string) $this->profile->get('profile'));
 
         // ── User Identity ───────────────────────────────────────────────
         $user = $request->user();
@@ -106,33 +122,45 @@ class TraceRequest
 
         // Query params
         foreach ($this->sanitize($request->query(), $sensitiveFields) as $key => $value) {
-            $span->setAttribute("query.{$key}", is_string($value) ? $value : json_encode($value));
+            $span->setAttribute("haoc.request.query.{$key}", is_scalar($value) ? $value : json_encode($value));
         }
 
         // Route params
         foreach ($this->sanitize($request->route()?->parameters() ?? [], $sensitiveFields) as $key => $value) {
-            $span->setAttribute("params.{$key}", is_string($value) ? $value : json_encode($value));
+            $span->setAttribute("haoc.request.params.{$key}", is_scalar($value) ? $value : json_encode($value));
         }
 
         // Body (POST/PUT/PATCH) — only when profile allows
+        $requestBodyAttrs = [];
         if (
             $captureBody
             && in_array($method, ['POST', 'PUT', 'PATCH'])
             && $request->isJson()
         ) {
-            foreach ($this->flattenAttributes('body', $this->sanitize($request->all(), $sensitiveFields)) as $key => $value) {
+            $requestBodyAttrs = $this->flattenAttributes('haoc.request.body', $this->sanitize($request->all(), $sensitiveFields));
+            foreach ($requestBodyAttrs as $key => $value) {
                 $span->setAttribute($key, $value);
             }
         }
 
         $traceId = $span->getContext()->getTraceId();
 
-        Log::info("{$method} /{$route} [{$traceId}]", [
-            'http.method' => $method,
-            'http.route' => "/{$route}",
-            'query' => $this->sanitize($request->query(), $sensitiveFields),
-            'params' => $this->sanitize($request->route()?->parameters() ?? [], $sensitiveFields),
-        ]);
+        Log::info("{$method} /{$route} [{$traceId}]", array_merge(
+            [
+                'http.method'     => $method,
+                'http.route'      => "/{$route}",
+                'haoc.otel.profile' => (string) $this->profile->get('profile'),
+            ],
+            array_map(
+                fn($v) => is_scalar($v) ? $v : json_encode($v),
+                $this->flattenAttributes('haoc.request.query', $this->sanitize($request->query(), $sensitiveFields))
+            ),
+            array_map(
+                fn($v) => is_scalar($v) ? $v : json_encode($v),
+                $this->flattenAttributes('haoc.request.params', $this->sanitize($request->route()?->parameters() ?? [], $sensitiveFields))
+            ),
+            $requestBodyAttrs
+        ));
 
         $startTime = microtime(true);
 
@@ -151,12 +179,43 @@ class TraceRequest
                 $span->setStatus(StatusCode::STATUS_ERROR, "HTTP {$statusCode}");
             }
 
-            Log::info("{$method} /{$route} {$statusCode} {$duration}ms [{$traceId}]", [
+            // ── Response body capture ───────────────────────────────────
+            $responseBodyAttrs = [];
+            if ($captureResponse) {
+                $contentType = $response->headers->get('Content-Type', '');
+                $isJson = str_contains($contentType, 'application/json');
+                if ($isJson) {
+                    $rawContent = $response->getContent();
+                    if ($rawContent !== false && strlen($rawContent) <= self::MAX_RESPONSE_BODY_SIZE) {
+                        $decoded = json_decode($rawContent, true);
+                        if (is_array($decoded)) {
+                            $sanitized = $this->sanitize($decoded, $sensitiveFields);
+                            $responseBodyAttrs = $this->flattenAttributes('haoc.response.body', $sanitized);
+                            foreach ($responseBodyAttrs as $key => $value) {
+                                $span->setAttribute($key, $value);
+                            }
+                        }
+                    }
+                }
+            }
+
+            $logContext = [
                 'http.method' => $method,
                 'http.route' => "/{$route}",
                 'http.status_code' => $statusCode,
                 'http.duration_ms' => $duration,
-            ]);
+            ];
+            if (!empty($responseBodyAttrs)) {
+                $logContext['response'] = $responseBodyAttrs;
+            }
+            $logMessage = "{$method} /{$route} {$statusCode} {$duration}ms [{$traceId}]";
+            if ($statusCode >= 500) {
+                Log::error($logMessage, $logContext);
+            } elseif ($statusCode >= 400) {
+                Log::warning($logMessage, $logContext);
+            } else {
+                Log::info($logMessage, $logContext);
+            }
 
             return $response;
         } catch (\Throwable $e) {
@@ -214,6 +273,12 @@ class TraceRequest
             $attrKey = "{$prefix}.{$key}";
             if (is_array($value)) {
                 $result = array_merge($result, $this->flattenAttributes($attrKey, $value, $depth + 1));
+            } elseif (is_bool($value)) {
+                // OTel PHP SDK stores booleans in attributes_bool column
+                $result[$attrKey] = $value;
+            } elseif (is_int($value) || is_float($value)) {
+                // Preserve numeric types for attributes_number column in ClickHouse
+                $result[$attrKey] = $value;
             } elseif (is_scalar($value)) {
                 $result[$attrKey] = (string) $value;
             }
