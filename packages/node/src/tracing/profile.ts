@@ -26,6 +26,14 @@ export interface ResolvedProfile {
   expressIgnoreLayers: ExpressIgnoreLayer[];
   captureRequestBody: boolean;
   captureResponseBody: boolean;
+  /** Whether to include the request body in Pino log entries (independent of span attributes). */
+  logRequestBody: boolean;
+  /** Whether to include the response body in Pino log entries (independent of span attributes). */
+  logResponseBody: boolean;
+  /** Routes where body/response will NOT be included in log entries (even if logRequestBody/logResponseBody is true). */
+  logBodyIgnoreRoutes: RegExp[];
+  /** If non-empty, ONLY these routes will have body/response in log entries. Takes precedence over logBodyIgnoreRoutes. */
+  logBodyOnlyRoutes: RegExp[];
   instrumentations: {
     fs: boolean;
     net: boolean;
@@ -64,9 +72,13 @@ const PROFILES: Record<HaocProfileName, ResolvedProfile> = {
     ignoreIncomingPaths: [...DEFAULT_IGNORE_INCOMING, STATIC_ASSET_REGEX],
     ignoreOutgoingUrls: [...DEFAULT_IGNORE_OUTGOING],
     ignoreRoutes: [],
-    expressIgnoreLayers: ['middleware', 'router'],
+    expressIgnoreLayers: ['middleware', 'router', 'request_handler'],
     captureRequestBody: false,
     captureResponseBody: false,
+    logRequestBody: false,
+    logResponseBody: false,
+    logBodyIgnoreRoutes: [],
+    logBodyOnlyRoutes: [],
     instrumentations: {
       fs: false,
       net: false,
@@ -92,6 +104,10 @@ const PROFILES: Record<HaocProfileName, ResolvedProfile> = {
     expressIgnoreLayers: ['middleware'],
     captureRequestBody: true,
     captureResponseBody: true,
+    logRequestBody: true,
+    logResponseBody: true,
+    logBodyIgnoreRoutes: [],
+    logBodyOnlyRoutes: [],
     instrumentations: {
       fs: false,
       net: false,
@@ -117,6 +133,10 @@ const PROFILES: Record<HaocProfileName, ResolvedProfile> = {
     expressIgnoreLayers: [],
     captureRequestBody: true,
     captureResponseBody: true,
+    logRequestBody: true,
+    logResponseBody: true,
+    logBodyIgnoreRoutes: [],
+    logBodyOnlyRoutes: [],
     instrumentations: {
       fs: true,
       net: true,
@@ -188,6 +208,14 @@ export interface ProfileOverrides {
   expressIgnoreLayers?: ExpressIgnoreLayer[];
   captureRequestBody?: boolean;
   captureResponseBody?: boolean;
+  /** Whether to include the request body in Pino log entries (independent of span capture). */
+  logRequestBody?: boolean;
+  /** Whether to include the response body in Pino log entries (independent of span capture). */
+  logResponseBody?: boolean;
+  /** Routes where body/response logging is suppressed. CSV regex via `HAOC_OTEL_LOG_BODY_IGNORE_ROUTES`. */
+  logBodyIgnoreRoutes?: (string | RegExp)[];
+  /** If set, only these routes get body/response in logs. CSV regex via `HAOC_OTEL_LOG_BODY_ONLY_ROUTES`. */
+  logBodyOnlyRoutes?: (string | RegExp)[];
   instrumentations?: Partial<ResolvedProfile['instrumentations']>;
   /**
    * If true, do not read HAOC_OTEL_* env vars (programmatic only).
@@ -262,6 +290,29 @@ export function resolveProfile(overrides: ProfileOverrides = {}): ResolvedProfil
     parseBool(env.HAOC_OTEL_CAPTURE_RESPONSE) ??
     base.captureResponseBody;
 
+  // ── Log body controls (independent of span capture) ─────────────────
+  const logRequestBody =
+    overrides.logRequestBody ??
+    parseBool(env.HAOC_OTEL_LOG_REQUEST_BODY) ??
+    base.logRequestBody;
+
+  const logResponseBody =
+    overrides.logResponseBody ??
+    parseBool(env.HAOC_OTEL_LOG_RESPONSE_BODY) ??
+    base.logResponseBody;
+
+  const logBodyIgnoreRoutes = [
+    ...base.logBodyIgnoreRoutes,
+    ...parsePatternList(env.HAOC_OTEL_LOG_BODY_IGNORE_ROUTES),
+    ...parsePatternList(overrides.logBodyIgnoreRoutes),
+  ];
+
+  const logBodyOnlyRoutes = [
+    ...base.logBodyOnlyRoutes,
+    ...parsePatternList(env.HAOC_OTEL_LOG_BODY_ONLY_ROUTES),
+    ...parsePatternList(overrides.logBodyOnlyRoutes),
+  ];
+
   // Per-instrumentation toggles via env: HAOC_OTEL_TRACE_<NAME>=true|false
   const envInstr: Partial<ResolvedProfile['instrumentations']> = {
     http: parseBool(env.HAOC_OTEL_TRACE_HTTP),
@@ -299,6 +350,10 @@ export function resolveProfile(overrides: ProfileOverrides = {}): ResolvedProfil
     expressIgnoreLayers,
     captureRequestBody,
     captureResponseBody,
+    logRequestBody,
+    logResponseBody,
+    logBodyIgnoreRoutes,
+    logBodyOnlyRoutes,
     instrumentations,
   };
 }
@@ -319,7 +374,11 @@ interface RuntimeProfileSummary {
   profile: HaocProfileName;
   captureRequestBody: boolean;
   captureResponseBody: boolean;
+  logRequestBody: boolean;
+  logResponseBody: boolean;
   ignoreRoutes: RegExp[];
+  logBodyIgnoreRoutes: RegExp[];
+  logBodyOnlyRoutes: RegExp[];
 }
 
 let _runtimeCache: RuntimeProfileSummary | null = null;
@@ -339,13 +398,25 @@ export function getRuntimeProfile(): RuntimeProfileSummary {
         profile: HaocProfileName;
         captureRequestBody: boolean;
         captureResponseBody: boolean;
+        logRequestBody: boolean;
+        logResponseBody: boolean;
         ignoreRoutes: string[];
+        logBodyIgnoreRoutes: string[];
+        logBodyOnlyRoutes: string[];
       };
       _runtimeCache = {
         profile: parsed.profile,
         captureRequestBody: parsed.captureRequestBody,
         captureResponseBody: parsed.captureResponseBody,
+        logRequestBody: parsed.logRequestBody ?? true,
+        logResponseBody: parsed.logResponseBody ?? true,
         ignoreRoutes: (parsed.ignoreRoutes ?? []).map(
+          (s) => new RegExp(s, 'i'),
+        ),
+        logBodyIgnoreRoutes: (parsed.logBodyIgnoreRoutes ?? []).map(
+          (s) => new RegExp(s, 'i'),
+        ),
+        logBodyOnlyRoutes: (parsed.logBodyOnlyRoutes ?? []).map(
           (s) => new RegExp(s, 'i'),
         ),
       };
@@ -359,9 +430,34 @@ export function getRuntimeProfile(): RuntimeProfileSummary {
     profile: defaults.profile,
     captureRequestBody: defaults.captureRequestBody,
     captureResponseBody: defaults.captureResponseBody,
+    logRequestBody: defaults.logRequestBody,
+    logResponseBody: defaults.logResponseBody,
     ignoreRoutes: [...defaults.ignoreRoutes],
+    logBodyIgnoreRoutes: [...defaults.logBodyIgnoreRoutes],
+    logBodyOnlyRoutes: [...defaults.logBodyOnlyRoutes],
   };
   return _runtimeCache;
+}
+
+/**
+ * Determines whether body/response should be included in log entries for a given route.
+ *
+ * Priority:
+ * 1. If `logBodyOnlyRoutes` is non-empty → only matching routes get body in logs.
+ * 2. Otherwise, if `logBodyIgnoreRoutes` matches → body is suppressed.
+ * 3. Otherwise → body is included.
+ */
+export function shouldLogBodyForRoute(
+  runtime: RuntimeProfileSummary,
+  route: string,
+): boolean {
+  if (runtime.logBodyOnlyRoutes.length > 0) {
+    return matchesAny(runtime.logBodyOnlyRoutes, route);
+  }
+  if (runtime.logBodyIgnoreRoutes.length > 0) {
+    return !matchesAny(runtime.logBodyIgnoreRoutes, route);
+  }
+  return true;
 }
 
 /**

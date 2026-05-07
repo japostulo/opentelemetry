@@ -1,4 +1,3 @@
-import { Writable } from 'node:stream';
 import type { LogDestination, LoggerConfig } from './types';
 import { mergeRedactPaths } from './redaction';
 
@@ -25,27 +24,20 @@ export function isConsoleEnabled(destination?: LogDestination): boolean {
   return d === 'both' || d === 'console';
 }
 
-// Null stream: silently discards all pino output.
-// Used when destination is 'signoz' — pino has nowhere to write, but
-// @opentelemetry/instrumentation-pino's mixin fires *before* the write,
-// so BatchLogRecordProcessor still captures every log record.
-const NULL_STREAM = new Writable({
-  write(_chunk, _encoding, callback) {
-    callback();
-  },
-});
-
 // ── Pino-http config builder ────────────────────────────────────────────
 
 /**
  * Builds a framework-agnostic pino-http options object.
  *
- * Returns either a plain options object (when using transport) or a tuple
- * `[options, stream]` (when routing to null stream for OTLP-only mode).
+ * The console transport is **always** mounted (unless destination is
+ * `none`). Whether log records also reach SigNoz via OTLP is controlled
+ * **at runtime** by the {@link GatedLogExporter} on the SDK side — that
+ * lets `LOG_DESTINATION` be flipped via `/admin/config` PUT without
+ * having to rebuild the pino transport (impossible once `app.use()` is
+ * called).
  *
- * This is the core of the logger configuration. Framework integrations
- * (NestJS LoggerModule, Express pino-http middleware) can consume this
- * directly.
+ * @returns Either `{ pinoOptions }` (console transport) or
+ *          `{ pinoOptions: { level: 'silent' } }` for `none`.
  */
 export function buildLoggerConfig(config?: LoggerConfig) {
   const destination = getLogDestination(config?.destination);
@@ -99,25 +91,8 @@ export function buildLoggerConfig(config?: LoggerConfig) {
         },
       };
 
-  if (destination === 'signoz') {
-    // OTLP only: discard all console output.
-    return {
-      pinoOptions: baseOptions,
-      stream: NULL_STREAM,
-    };
-  }
-
-  if (destination === 'console') {
-    // Console only — no OTLP log processor.
-    return {
-      pinoOptions: {
-        ...baseOptions,
-        transport: consoleTransport,
-      },
-    };
-  }
-
-  // 'both': async console transport + OTLP via SDK BatchLogRecordProcessor
+  // Always attach the console transport. OTLP emission is gated at
+  // runtime by GatedLogExporter (see logger/gated-exporter.ts).
   return {
     pinoOptions: {
       ...baseOptions,

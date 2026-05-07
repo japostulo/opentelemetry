@@ -107,6 +107,43 @@ export interface HaocTelemetryConfig {
   captureResponseBody?: boolean;
 
   /**
+   * Whether to include the request body in Pino log entries.
+   * This is independent of `captureRequestBody` which controls span attributes.
+   * Default: `true` in all profiles.
+   *
+   * Overridable via `HAOC_OTEL_LOG_REQUEST_BODY`.
+   */
+  logRequestBody?: boolean;
+
+  /**
+   * Whether to include the response body in Pino log entries.
+   * This is independent of `captureResponseBody` which controls span attributes.
+   * Default: `true` in all profiles.
+   *
+   * Overridable via `HAOC_OTEL_LOG_RESPONSE_BODY`.
+   */
+  logResponseBody?: boolean;
+
+  /**
+   * Routes where body/response will NOT be included in log entries, even if
+   * `logRequestBody` / `logResponseBody` are true. Useful for high-traffic or
+   * sensitive endpoints.
+   *
+   * Strings are compiled as case-insensitive regex. Merged with
+   * `HAOC_OTEL_LOG_BODY_IGNORE_ROUTES` (CSV of regex).
+   */
+  logBodyIgnoreRoutes?: (string | RegExp)[];
+
+  /**
+   * If non-empty, ONLY these routes will have body/response included in log
+   * entries. This takes precedence over `logBodyIgnoreRoutes`.
+   *
+   * Strings are compiled as case-insensitive regex. Merged with
+   * `HAOC_OTEL_LOG_BODY_ONLY_ROUTES` (CSV of regex).
+   */
+  logBodyOnlyRoutes?: (string | RegExp)[];
+
+  /**
    * Per-instrumentation toggles. Each entry overrides the profile default.
    * Override individually via `HAOC_OTEL_TRACE_<NAME>` env vars.
    */

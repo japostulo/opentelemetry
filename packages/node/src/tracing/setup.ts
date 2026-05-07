@@ -20,7 +20,7 @@ import { hostname } from 'node:os';
 import { URL } from 'node:url';
 
 import type { HaocTelemetryConfig } from './types';
-import { isOtlpEnabled } from '../logger/config';
+import { GatedLogExporter } from '../logger/gated-exporter';
 import {
   matchesAny,
   resolveProfile,
@@ -148,6 +148,10 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
     expressIgnoreLayers: config.expressIgnoreLayers,
     captureRequestBody: config.captureRequestBody,
     captureResponseBody: config.captureResponseBody,
+    logRequestBody: config.logRequestBody,
+    logResponseBody: config.logResponseBody,
+    logBodyIgnoreRoutes: config.logBodyIgnoreRoutes,
+    logBodyOnlyRoutes: config.logBodyOnlyRoutes,
     instrumentations: {
       ...config.instrumentations,
       // legacy `disabledInstrumentations` array → flag map
@@ -163,7 +167,11 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
     profile: resolved.profile,
     captureRequestBody: resolved.captureRequestBody,
     captureResponseBody: resolved.captureResponseBody,
+    logRequestBody: resolved.logRequestBody,
+    logResponseBody: resolved.logResponseBody,
     ignoreRoutes: resolved.ignoreRoutes.map((r) => r.source),
+    logBodyIgnoreRoutes: resolved.logBodyIgnoreRoutes.map((r) => r.source),
+    logBodyOnlyRoutes: resolved.logBodyOnlyRoutes.map((r) => r.source),
   });
 
   // ── Diagnostics ──────────────────────────────────────────────────────
@@ -175,6 +183,13 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
   }
 
   // ── Resource ─────────────────────────────────────────────────────────
+  // NOTE: `haoc.otel.profile` is intentionally NOT included as a resource
+  // attribute. Resource attrs are immutable after SDK init; the active
+  // profile can change at runtime via /admin/config and we want every
+  // span/log to reflect the *current* profile. The attribute is therefore
+  // applied per-span by the framework interceptors/middlewares (NestJS
+  // `HaocTraceInterceptor`, Express `createTraceMiddleware`) and per-log
+  // record by `otelEmit()`.
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]:
       config.serviceName ?? process.env.OTEL_SERVICE_NAME ?? 'unknown',
@@ -182,7 +197,6 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
     'service.version':
       config.serviceVersion ?? process.env.npm_package_version ?? 'unknown',
     'service.instance.id': process.env.HOSTNAME ?? hostname(),
-    'haoc.otel.profile': resolved.profile,
     ...config.additionalResourceAttributes,
   });
 
@@ -200,11 +214,11 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
     url: `${otlpEndpoint}/v1/metrics`,
   });
 
-  const logRecordProcessor = isOtlpEnabled(config.logDestination)
-    ? new BatchLogRecordProcessor(
-        new OTLPLogExporter({ url: `${otlpEndpoint}/v1/logs` }),
-      )
-    : undefined;
+  const logRecordProcessor = new BatchLogRecordProcessor(
+    new GatedLogExporter(
+      new OTLPLogExporter({ url: `${otlpEndpoint}/v1/logs` }),
+    ),
+  );
 
   // ── Instrumentations ────────────────────────────────────────────────
   const instrumentationConfig = buildInstrumentationConfig(
@@ -224,7 +238,7 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
         exportIntervalMillis: metricIntervalMs,
       }),
     ],
-    ...(logRecordProcessor ? { logRecordProcessors: [logRecordProcessor] } : {}),
+    logRecordProcessors: [logRecordProcessor],
     instrumentations: [
       getNodeAutoInstrumentations(instrumentationConfig as never),
     ],
@@ -243,7 +257,7 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
 }
 
 // Re-export helpers used by interceptor/middleware for runtime decisions.
-export { resolveProfile, matchesAny } from './profile';
+export { resolveProfile, matchesAny, shouldLogBodyForRoute } from './profile';
 export type {
   HaocProfileName,
   ResolvedProfile,

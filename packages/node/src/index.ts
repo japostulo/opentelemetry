@@ -2,6 +2,18 @@
 export type { HaocTelemetryConfig } from './tracing/types';
 export { setupTracing } from './tracing/setup';
 
+// ── Profile utilities (admin / testing) ─────────────────────────────────
+export {
+  resolveProfile,
+  getRuntimeProfile,
+  _resetRuntimeProfileCache,
+} from './tracing/profile';
+export type {
+  HaocProfileName,
+  ResolvedProfile,
+  ProfileOverrides,
+} from './tracing/profile';
+
 // ── Identity ────────────────────────────────────────────────────────────
 export {
   HAOC_USER_ATTR,
@@ -23,6 +35,7 @@ export {
   isOtlpEnabled,
   isConsoleEnabled,
 } from './logger/config';
+export { GatedLogExporter } from './logger/gated-exporter';
 export { DEFAULT_REDACT_PATHS, mergeRedactPaths } from './logger/redaction';
 
 // ── OpenTelemetry API (re-export for convenience) ───────────────────────
