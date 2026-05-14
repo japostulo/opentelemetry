@@ -7,9 +7,9 @@
 
 // ── Attribute Keys ──────────────────────────────────────────────────────
 
-export const HAOC_USER_ATTR = 'haoc.user.id';
-export const HAOC_USER_ROLE_ATTR = 'haoc.user.role';
-export const HAOC_USER_TYPE_ATTR = 'haoc.user.type';
+export const HAOC_USER_ATTR = 'user.id';
+export const HAOC_USER_ROLE_ATTR = 'user.role';
+export const HAOC_USER_TYPE_ATTR = 'user.type';
 
 // ── Types ───────────────────────────────────────────────────────────────
 

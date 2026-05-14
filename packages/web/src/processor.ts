@@ -82,7 +82,7 @@ export class HaocSpanProcessor implements SpanProcessor {
    */
   private shouldDrop(span: Span | ReadableSpan): boolean {
     const attrs = span.attributes as Record<string, unknown>;
-    if (attrs['haoc.drop'] === true) return true;
+    if (attrs['otel.drop'] === true) return true;
 
     // URL-based filtering
     const httpUrl = (attrs['http.url'] ?? attrs['url.full']) as string | undefined;
@@ -158,7 +158,7 @@ export class HaocSpanProcessor implements SpanProcessor {
     baggage = baggage.setEntry('app.platform', { value: this.browserInfo['app.platform'] });
 
     if (user) {
-      baggage = baggage.setEntry('haoc.user.id', { value: user.id });
+      baggage = baggage.setEntry('user.id', { value: user.id });
     }
 
     // Store baggage in context for downstream propagation

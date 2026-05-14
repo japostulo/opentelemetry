@@ -73,7 +73,7 @@ export interface HaocWebConfig {
    * - `standard`: minimal + document-load.
    * - `verbose`: legacy "everything on" behaviour.
    *
-   * Overridable via `VITE_OTEL_PROFILE` / `HAOC_OTEL_PROFILE`.
+   * Overridable via `VITE_OTEL_PROFILE` / `OTEL_PROFILE`.
    */
   profile?: HaocWebProfileName;
 
@@ -82,14 +82,14 @@ export interface HaocWebConfig {
    * Range 0..1. Defaults to 1.0; the parent-based sampler ensures that
    * if the frontend samples a trace, the entire distributed trace
    * (frontend → API → Laravel) is preserved.
-   * Overridable via `VITE_OTEL_SAMPLE_RATIO` / `HAOC_OTEL_SAMPLE_RATIO`.
+   * Overridable via `VITE_OTEL_SAMPLE_RATIO` / `OTEL_SAMPLE_RATIO`.
    */
   sampleRatio?: number;
 
   /**
    * Extra URL patterns to drop (no span). Strings compiled as case-
    * insensitive regex. Merged with profile defaults and
-   * `VITE_OTEL_IGNORE_URLS` / `HAOC_OTEL_IGNORE_URLS` (CSV).
+   * `VITE_OTEL_IGNORE_URLS` / `OTEL_IGNORE_URLS` (CSV).
    */
   ignoreUrls?: (string | RegExp)[];
 
@@ -195,7 +195,7 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
     'os.name': browserInfo['os.name'],
     'device.type': browserInfo['device.type'],
     'app.platform': browserInfo['app.platform'],
-    'haoc.otel.profile': resolved.profile,
+    'otel.profile': resolved.profile,
     ...config.additionalResourceAttributes,
   });
 
@@ -257,7 +257,7 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
           const url = (xhr as XMLHttpRequest & { responseURL?: string })
             .responseURL;
           if (url && !shouldTraceUrl(url)) {
-            span.setAttribute('haoc.drop', true);
+            span.setAttribute('otel.drop', true);
             return;
           }
           // Enrich span name with path (default OTel name is just the method).
@@ -282,7 +282,7 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
               ? request
               : (request as Request).url;
           if (url && !shouldTraceUrl(url)) {
-            span.setAttribute('haoc.drop', true);
+            span.setAttribute('otel.drop', true);
             return;
           }
           // Enrich span name with path (default OTel name is just the method).

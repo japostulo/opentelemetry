@@ -144,7 +144,7 @@ export function resolveWebProfile(
 
   const profileName: HaocWebProfileName =
     overrides.profile ??
-    ((pickEnv(env, 'HAOC_OTEL_PROFILE', 'VITE_OTEL_PROFILE') as
+    ((pickEnv(env, 'OTEL_PROFILE', 'VITE_OTEL_PROFILE') as
       | HaocWebProfileName
       | undefined) ??
       'minimal');
@@ -154,14 +154,14 @@ export function resolveWebProfile(
   const sampleRatio =
     overrides.sampleRatio ??
     parseRatio(
-      pickEnv(env, 'HAOC_OTEL_SAMPLE_RATIO', 'VITE_OTEL_SAMPLE_RATIO'),
+      pickEnv(env, 'OTEL_SAMPLE_RATIO', 'VITE_OTEL_SAMPLE_RATIO'),
     ) ??
     base.sampleRatio;
 
   const ignoreUrls = [
     ...base.ignoreUrls,
     ...parsePatternList(
-      pickEnv(env, 'HAOC_OTEL_IGNORE_URLS', 'VITE_OTEL_IGNORE_URLS'),
+      pickEnv(env, 'OTEL_IGNORE_URLS', 'VITE_OTEL_IGNORE_URLS'),
     ),
     ...parsePatternList(overrides.ignoreUrls),
   ];
@@ -169,7 +169,7 @@ export function resolveWebProfile(
   const ignoreErrorMessages = [
     ...base.ignoreErrorMessages,
     ...parsePatternList(
-      pickEnv(env, 'HAOC_OTEL_IGNORE_ERRORS', 'VITE_OTEL_IGNORE_ERRORS'),
+      pickEnv(env, 'OTEL_IGNORE_ERRORS', 'VITE_OTEL_IGNORE_ERRORS'),
     ),
     ...parsePatternList(overrides.ignoreErrorMessages),
   ];
@@ -177,14 +177,14 @@ export function resolveWebProfile(
   const enableDocumentLoad =
     overrides.enableDocumentLoad ??
     parseBool(
-      pickEnv(env, 'HAOC_OTEL_DOCUMENT_LOAD', 'VITE_OTEL_DOCUMENT_LOAD'),
+      pickEnv(env, 'OTEL_DOCUMENT_LOAD', 'VITE_OTEL_DOCUMENT_LOAD'),
     ) ??
     base.enableDocumentLoad;
 
   const enableErrorTracking =
     overrides.enableErrorTracking ??
     parseBool(
-      pickEnv(env, 'HAOC_OTEL_ERROR_TRACKING', 'VITE_OTEL_ERROR_TRACKING'),
+      pickEnv(env, 'OTEL_ERROR_TRACKING', 'VITE_OTEL_ERROR_TRACKING'),
     ) ??
     base.enableErrorTracking;
 
@@ -193,7 +193,7 @@ export function resolveWebProfile(
     parseBool(
       pickEnv(
         env,
-        'HAOC_OTEL_API_WHITELIST',
+        'OTEL_API_WHITELIST',
         'VITE_OTEL_API_WHITELIST',
       ),
     ) ??
