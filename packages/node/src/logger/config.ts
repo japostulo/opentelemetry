@@ -1,5 +1,6 @@
 import type { LogDestination, LoggerConfig } from './types';
 import { mergeRedactPaths } from './redaction';
+import { ATTR_LOG_TITLE } from '../core/semantic-attributes';
 
 // ── Destination helpers ─────────────────────────────────────────────────
 
@@ -70,6 +71,35 @@ export function buildLoggerConfig(config?: LoggerConfig) {
       res: () => undefined,
     },
     customProps: () => ({ environment }),
+    hooks: {
+      // Auto-populate log.title with the log message so every app-level
+      // log call (logger.info / debug / warn / error) is searchable by
+      // title in SigNoz without requiring callers to set it manually.
+      logMethod(
+        inputArgs: unknown[],
+        method: (...args: unknown[]) => void,
+      ) {
+        if (
+          inputArgs.length >= 2 &&
+          typeof inputArgs[0] === 'object' &&
+          inputArgs[0] !== null &&
+          typeof inputArgs[1] === 'string'
+        ) {
+          // logger.info(mergeObj, message, ...)
+          const mergeObj = inputArgs[0] as Record<string, unknown>;
+          if (!Object.prototype.hasOwnProperty.call(mergeObj, ATTR_LOG_TITLE)) {
+            inputArgs[0] = { ...mergeObj, [ATTR_LOG_TITLE]: inputArgs[1] };
+          }
+        } else if (inputArgs.length >= 1 && typeof inputArgs[0] === 'string') {
+          // logger.info(message, ...)
+          return method.apply(this, [
+            { [ATTR_LOG_TITLE]: inputArgs[0] },
+            ...inputArgs,
+          ]);
+        }
+        return method.apply(this, inputArgs);
+      },
+    },
   };
 
   // Console transport — async via pino worker thread (non-blocking)
