@@ -1,3 +1,6 @@
+// ── Core contracts (semantic attributes, profiles, payload policy) ───────
+export * from './core';
+
 // ── Tracing ─────────────────────────────────────────────────────────────
 export type { HaocTelemetryConfig } from './tracing/types';
 export { setupTracing } from './tracing/setup';
@@ -22,6 +25,7 @@ export {
   setUser,
   clearUser,
   getUser,
+  identifyUser,
   getUserSpanAttributes,
   type HaocUserIdentity,
   type HaocUserType,
