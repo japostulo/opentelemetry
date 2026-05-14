@@ -29,22 +29,31 @@ app.use(express.json());
 app.use(createPinoMiddleware());
 app.use(createTraceMiddleware());
 
-app.get('/hello', (_req, res) => {
+app.get('/hello', (req, res) => {
   const span = trace.getSpan(context.active());
+  const traceId = span?.spanContext().traceId ?? 'none';
+
+  req.log.info({ step: 'handler', traceId }, 'Processing /hello');
+
   res.json({
     service: 'express',
-    traceId: span?.spanContext().traceId ?? 'none',
+    traceId,
     message: 'Hello from Express playground!',
   });
 });
 
-app.get('/chain', async (_req, res) => {
+app.get('/chain', async (req, res) => {
   const span = trace.getSpan(context.active());
   const traceId = span?.spanContext().traceId ?? 'none';
+
+  req.log.info({ step: 'fetching-downstream', traceId }, 'Chain: calling laravel-app');
 
   try {
     const upstream = await fetch('http://laravel-app:8080/api/hello');
     const downstream = await upstream.json();
+
+    req.log.info({ step: 'downstream-received', status: upstream.status, traceId }, 'Chain: response received');
+
     res.json({ service: 'express', traceId, downstream });
   } catch (err) {
     res.status(502).json({

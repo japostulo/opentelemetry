@@ -2,16 +2,26 @@ import {
   Controller, Get, Post, Body,
   HttpException, HttpStatus, Query,
 } from '@nestjs/common';
+import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { trace, context, SpanStatusCode, identifyUser, getUser } from '@haocruz/opentelemetry';
 
 @Controller()
 export class AppController {
+  constructor(
+    @InjectPinoLogger(AppController.name)
+    private readonly logger: PinoLogger,
+  ) {}
+
   @Get('hello')
   hello() {
     const span = trace.getSpan(context.active());
+    const traceId = span?.spanContext().traceId ?? 'none';
+
+    this.logger.info({ step: 'handler', traceId }, 'Processing /hello');
+
     return {
       service: 'nestjs',
-      traceId: span?.spanContext().traceId ?? 'none',
+      traceId,
       message: 'Hello from NestJS playground!',
     };
   }
@@ -22,8 +32,12 @@ export class AppController {
     const span = trace.getSpan(context.active());
     const traceId = span?.spanContext().traceId ?? 'none';
 
+    this.logger.info({ step: 'fetching-downstream', traceId }, 'Chain: calling express-app');
+
     const res = await fetch('http://express-app:3020/chain');
     const downstream = await res.json();
+
+    this.logger.info({ step: 'downstream-received', status: res.status, traceId }, 'Chain: response received');
 
     return { service: 'nestjs', traceId, downstream };
   }
@@ -95,9 +109,13 @@ export class AppController {
   @Post('echo')
   echo(@Body() body: Record<string, unknown>) {
     const span = trace.getSpan(context.active());
+    const traceId = span?.spanContext().traceId ?? 'none';
+
+    this.logger.info({ step: 'echo', traceId, bodyKeys: Object.keys(body) }, 'Processing /echo');
+
     return {
       service: 'nestjs',
-      traceId: span?.spanContext().traceId ?? 'none',
+      traceId,
       received: body,
     };
   }

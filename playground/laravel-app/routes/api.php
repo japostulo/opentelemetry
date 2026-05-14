@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use OpenTelemetry\API\Trace\TracerInterface;
 use OpenTelemetry\API\Trace\StatusCode;
@@ -8,6 +9,13 @@ use App\Http\Middleware\RuntimeConfigMiddleware;
 Route::get('/hello', function (TracerInterface $tracer) {
     $span = $tracer->spanBuilder('GET /api/hello')->startSpan();
     $traceId = $span->getContext()->getTraceId();
+
+    Log::info('Processing /api/hello', [
+        'step'    => 'handler',
+        'traceId' => $traceId,
+        'service' => 'laravel',
+    ]);
+
     $span->end();
 
     return response()->json([
@@ -20,8 +28,13 @@ Route::get('/hello', function (TracerInterface $tracer) {
 Route::post('/echo', function () {
     $body = request()->all();
 
+    Log::info('Processing /api/echo', [
+        'step'     => 'handler',
+        'bodyKeys' => array_keys($body),
+    ]);
+
     return response()->json([
-        'service' => 'laravel',
+        'service'  => 'laravel',
         'received' => $body,
     ]);
 });

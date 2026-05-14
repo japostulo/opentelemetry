@@ -19,5 +19,5 @@ return [
 
     // Application providers
     App\Providers\AppServiceProvider::class,
-    Haoc\OpenTelemetry\HaocOpenTelemetryServiceProvider::class,
+    Haoc\OpenTelemetry\OpenTelemetryServiceProvider::class,
 ];

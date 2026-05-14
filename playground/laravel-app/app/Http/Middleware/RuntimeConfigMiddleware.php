@@ -18,19 +18,19 @@ class RuntimeConfigMiddleware
                 $config = json_decode($raw, true);
                 if (is_array($config)) {
                     if (isset($config['profile'])) {
-                        Config::set('haoc-otel.profile', $config['profile']);
+                        Config::set('otel.profile', $config['profile']);
                     }
                     if (array_key_exists('captureBody', $config)) {
-                        Config::set('haoc-otel.capture_request_body', (bool) $config['captureBody']);
+                        Config::set('otel.capture_request_body', (bool) $config['captureBody']);
                     }
                     if (array_key_exists('captureResponse', $config)) {
-                        Config::set('haoc-otel.capture_response_body', (bool) $config['captureResponse']);
+                        Config::set('otel.capture_response_body', (bool) $config['captureResponse']);
                     }
                     if (isset($config['logDestination'])) {
-                        Config::set('haoc-otel.log_destination', $config['logDestination']);
+                        Config::set('otel.log_destination', $config['logDestination']);
                     }
                     if (isset($config['logPayloadMode'])) {
-                        Config::set('haoc-otel.log_payload_mode', $config['logPayloadMode']);
+                        Config::set('otel.log_payload_mode', $config['logPayloadMode']);
                     }
                 }
             }

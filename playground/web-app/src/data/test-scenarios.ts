@@ -276,7 +276,7 @@ export const redactionScenarios: TestScenario[] = [
     id: 'F3', app: 'Laravel', profile: 'standard', endpoint: 'http://localhost:8085/api/echo',
     method: 'POST', body: echoBody,
     expected: 'body.password=[REDACTED], body.token=[REDACTED] (sensitive_fields do config)',
-    signozValidation: 'Tags → verificar redação conforme sensitive_fields em haoc-otel.php',
+    signozValidation: 'Tags → verificar redação conforme sensitive_fields em otel.php',
   },
   {
     id: 'F4', app: 'NestJS', profile: 'standard', endpoint: 'http://localhost:3010/echo',
