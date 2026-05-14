@@ -2,16 +2,17 @@
  * Profile resolver for HAOC OpenTelemetry (Node).
  *
  * Resolves the effective configuration in this precedence order:
- *   explicit programmatic argument > env var (HAOC_OTEL_*) > profile default
+ *   explicit programmatic argument > env var (OTEL_*) > profile default
  *
  * Three named profiles:
  *   - `minimal` (default): only essential server-inbound HTTP + DB + errors.
  *     Express middleware spans suppressed; static-asset / health / metrics
  *     paths ignored; request/response body capture is OFF.
- *   - `standard`: same as `minimal` but with body/response capture ON and
- *     a wider sample ratio.
- *   - `verbose`: legacy behaviour — everything on, no path filters.
+ *   - `standard`: basic tracing without span body flatten; payload goes into
+ *     logs as a single `haoc.request.json` / `haoc.response.json` attribute.
+ *   - `verbose`: everything on — span body flatten, full log payload, OPTIONS logging.
  */
+import type { PayloadMode } from '../core/observability-profile';
 
 export type HaocProfileName = 'minimal' | 'standard' | 'verbose';
 
@@ -30,6 +31,15 @@ export interface ResolvedProfile {
   logRequestBody: boolean;
   /** Whether to include the response body in Pino log entries (independent of span attributes). */
   logResponseBody: boolean;
+  /**
+   * How payload is stored in log attributes.
+   * - `none`:      no payload in logs (minimal)
+   * - `json-attr`: single `haoc.request.json` / `haoc.response.json` attribute (standard, verbose)
+   * - `flatten`:   legacy dot-notation attributes (backward compat)
+   *
+   * Overridable via `OTEL_LOG_PAYLOAD_MODE` env var.
+   */
+  logPayloadMode: PayloadMode;
   /** Routes where body/response will NOT be included in log entries (even if logRequestBody/logResponseBody is true). */
   logBodyIgnoreRoutes: RegExp[];
   /** If non-empty, ONLY these routes will have body/response in log entries. Takes precedence over logBodyIgnoreRoutes. */
@@ -77,6 +87,7 @@ const PROFILES: Record<HaocProfileName, ResolvedProfile> = {
     captureResponseBody: false,
     logRequestBody: false,
     logResponseBody: false,
+    logPayloadMode: 'none' as PayloadMode,
     logBodyIgnoreRoutes: [],
     logBodyOnlyRoutes: [],
     instrumentations: {
@@ -102,10 +113,12 @@ const PROFILES: Record<HaocProfileName, ResolvedProfile> = {
     ignoreOutgoingUrls: [],
     ignoreRoutes: [],
     expressIgnoreLayers: ['middleware'],
-    captureRequestBody: true,
-    captureResponseBody: true,
+    // standard does NOT flatten body into span attrs — use json-attr in logs
+    captureRequestBody: false,
+    captureResponseBody: false,
     logRequestBody: true,
     logResponseBody: true,
+    logPayloadMode: 'json-attr' as PayloadMode,
     logBodyIgnoreRoutes: [],
     logBodyOnlyRoutes: [],
     instrumentations: {
@@ -135,6 +148,7 @@ const PROFILES: Record<HaocProfileName, ResolvedProfile> = {
     captureResponseBody: true,
     logRequestBody: true,
     logResponseBody: true,
+    logPayloadMode: 'json-attr' as PayloadMode,
     logBodyIgnoreRoutes: [],
     logBodyOnlyRoutes: [],
     instrumentations: {
@@ -212,13 +226,18 @@ export interface ProfileOverrides {
   logRequestBody?: boolean;
   /** Whether to include the response body in Pino log entries (independent of span capture). */
   logResponseBody?: boolean;
-  /** Routes where body/response logging is suppressed. CSV regex via `HAOC_OTEL_LOG_BODY_IGNORE_ROUTES`. */
+  /** Routes where body/response logging is suppressed. CSV regex via `OTEL_LOG_BODY_IGNORE_ROUTES`. */
   logBodyIgnoreRoutes?: (string | RegExp)[];
-  /** If set, only these routes get body/response in logs. CSV regex via `HAOC_OTEL_LOG_BODY_ONLY_ROUTES`. */
+  /** If set, only these routes get body/response in logs. CSV regex via `OTEL_LOG_BODY_ONLY_ROUTES`. */
   logBodyOnlyRoutes?: (string | RegExp)[];
+  /**
+   * Override the log payload mode for this service.
+   * Env var: `OTEL_LOG_PAYLOAD_MODE=none|json-attr|flatten`.
+   */
+  logPayloadMode?: PayloadMode;
   instrumentations?: Partial<ResolvedProfile['instrumentations']>;
   /**
-   * If true, do not read HAOC_OTEL_* env vars (programmatic only).
+   * If true, do not read OTEL_* env vars (programmatic only).
    * Useful for tests.
    */
   ignoreEnv?: boolean;
@@ -235,7 +254,7 @@ export function resolveProfile(overrides: ProfileOverrides = {}): ResolvedProfil
 
   const profileName: HaocProfileName =
     overrides.profile ??
-    (env.HAOC_OTEL_PROFILE as HaocProfileName | undefined) ??
+    (env.OTEL_PROFILE as HaocProfileName | undefined) ??
     'minimal';
 
   const base = PROFILES[profileName] ?? PROFILES.minimal;
@@ -243,7 +262,7 @@ export function resolveProfile(overrides: ProfileOverrides = {}): ResolvedProfil
   // Sample ratio: explicit > env > profile default. In production fall back
   // to a more aggressive default if the profile says 1.0 and no env is set.
   const explicitRatio =
-    overrides.sampleRatio ?? parseRatio(env.HAOC_OTEL_SAMPLE_RATIO);
+    overrides.sampleRatio ?? parseRatio(env.OTEL_SAMPLE_RATIO);
   let sampleRatio = explicitRatio ?? base.sampleRatio;
   if (
     explicitRatio === undefined &&
@@ -256,78 +275,86 @@ export function resolveProfile(overrides: ProfileOverrides = {}): ResolvedProfil
 
   const ignoreIncomingPaths = [
     ...base.ignoreIncomingPaths,
-    ...parsePatternList(env.HAOC_OTEL_IGNORE_URLS),
+    ...parsePatternList(env.OTEL_IGNORE_URLS),
     ...parsePatternList(overrides.ignoreIncomingPaths),
   ];
 
   const ignoreOutgoingUrls = [
     ...base.ignoreOutgoingUrls,
-    ...parsePatternList(env.HAOC_OTEL_IGNORE_OUTGOING_URLS),
+    ...parsePatternList(env.OTEL_IGNORE_OUTGOING_URLS),
     ...parsePatternList(overrides.ignoreOutgoingUrls),
   ];
 
   const ignoreRoutes = [
     ...base.ignoreRoutes,
-    ...parsePatternList(env.HAOC_OTEL_IGNORE_ROUTES),
+    ...parsePatternList(env.OTEL_IGNORE_ROUTES),
     ...parsePatternList(overrides.ignoreRoutes),
   ];
 
   const expressIgnoreLayers: ExpressIgnoreLayer[] =
     overrides.expressIgnoreLayers ??
-    (env.HAOC_OTEL_EXPRESS_IGNORE_LAYERS
-      ? (env.HAOC_OTEL_EXPRESS_IGNORE_LAYERS.split(',')
+    (env.OTEL_EXPRESS_IGNORE_LAYERS
+      ? (env.OTEL_EXPRESS_IGNORE_LAYERS.split(',')
           .map((s) => s.trim())
           .filter(Boolean) as ExpressIgnoreLayer[])
       : base.expressIgnoreLayers);
 
   const captureRequestBody =
     overrides.captureRequestBody ??
-    parseBool(env.HAOC_OTEL_CAPTURE_BODY) ??
+    parseBool(env.OTEL_CAPTURE_BODY) ??
     base.captureRequestBody;
 
   const captureResponseBody =
     overrides.captureResponseBody ??
-    parseBool(env.HAOC_OTEL_CAPTURE_RESPONSE) ??
+    parseBool(env.OTEL_CAPTURE_RESPONSE) ??
     base.captureResponseBody;
 
   // ── Log body controls (independent of span capture) ─────────────────
   const logRequestBody =
     overrides.logRequestBody ??
-    parseBool(env.HAOC_OTEL_LOG_REQUEST_BODY) ??
+    parseBool(env.OTEL_LOG_REQUEST_BODY) ??
     base.logRequestBody;
 
   const logResponseBody =
     overrides.logResponseBody ??
-    parseBool(env.HAOC_OTEL_LOG_RESPONSE_BODY) ??
+    parseBool(env.OTEL_LOG_RESPONSE_BODY) ??
     base.logResponseBody;
 
   const logBodyIgnoreRoutes = [
     ...base.logBodyIgnoreRoutes,
-    ...parsePatternList(env.HAOC_OTEL_LOG_BODY_IGNORE_ROUTES),
+    ...parsePatternList(env.OTEL_LOG_BODY_IGNORE_ROUTES),
     ...parsePatternList(overrides.logBodyIgnoreRoutes),
   ];
 
   const logBodyOnlyRoutes = [
     ...base.logBodyOnlyRoutes,
-    ...parsePatternList(env.HAOC_OTEL_LOG_BODY_ONLY_ROUTES),
+    ...parsePatternList(env.OTEL_LOG_BODY_ONLY_ROUTES),
     ...parsePatternList(overrides.logBodyOnlyRoutes),
   ];
 
-  // Per-instrumentation toggles via env: HAOC_OTEL_TRACE_<NAME>=true|false
+  // Log payload mode: explicit override > env var > profile default
+  const envPayloadMode = env.OTEL_LOG_PAYLOAD_MODE as PayloadMode | undefined;
+  const validModes: PayloadMode[] = ['none', 'json-attr', 'flatten'];
+  const logPayloadMode: PayloadMode =
+    overrides.logPayloadMode ??
+    (validModes.includes(envPayloadMode as PayloadMode) ? envPayloadMode! : undefined) ??
+    base.logPayloadMode;
+
+  // Per-instrumentation toggles via env: OTEL_TRACE_<NAME>=true|false
   const envInstr: Partial<ResolvedProfile['instrumentations']> = {
-    http: parseBool(env.HAOC_OTEL_TRACE_HTTP),
-    express: parseBool(env.HAOC_OTEL_TRACE_EXPRESS),
-    nestjs: parseBool(env.HAOC_OTEL_TRACE_NESTJS),
-    pg: parseBool(env.HAOC_OTEL_TRACE_PG),
-    mysql: parseBool(env.HAOC_OTEL_TRACE_MYSQL),
-    mysql2: parseBool(env.HAOC_OTEL_TRACE_MYSQL2),
-    mongodb: parseBool(env.HAOC_OTEL_TRACE_MONGODB),
-    ioredis: parseBool(env.HAOC_OTEL_TRACE_IOREDIS),
-    redis: parseBool(env.HAOC_OTEL_TRACE_REDIS),
-    pino: parseBool(env.HAOC_OTEL_TRACE_PINO),
-    fs: parseBool(env.HAOC_OTEL_TRACE_FS),
-    net: parseBool(env.HAOC_OTEL_TRACE_NET),
-    dns: parseBool(env.HAOC_OTEL_TRACE_DNS),
+    http: parseBool(env.OTEL_TRACE_HTTP),
+    express: parseBool(env.OTEL_TRACE_EXPRESS),
+    nestjs: parseBool(env.OTEL_TRACE_NESTJS),
+    pg: parseBool(env.OTEL_TRACE_PG),
+    mysql: parseBool(env.OTEL_TRACE_MYSQL),
+    mysql2: parseBool(env.OTEL_TRACE_MYSQL2),
+    mongodb: parseBool(env.OTEL_TRACE_MONGODB),
+    ioredis: parseBool(env.OTEL_TRACE_IOREDIS),
+    redis: parseBool(env.OTEL_TRACE_REDIS),
+    pino: parseBool(env.OTEL_TRACE_PINO),
+    fs: parseBool(env.OTEL_TRACE_FS),
+    net: parseBool(env.OTEL_TRACE_NET),
+    dns: parseBool(env.OTEL_TRACE_DNS),
   } as Partial<ResolvedProfile['instrumentations']>;
 
   // Strip undefined entries so they don't override base/explicit values.
@@ -352,6 +379,7 @@ export function resolveProfile(overrides: ProfileOverrides = {}): ResolvedProfil
     captureResponseBody,
     logRequestBody,
     logResponseBody,
+    logPayloadMode,
     logBodyIgnoreRoutes,
     logBodyOnlyRoutes,
     instrumentations,
@@ -376,6 +404,7 @@ interface RuntimeProfileSummary {
   captureResponseBody: boolean;
   logRequestBody: boolean;
   logResponseBody: boolean;
+  logPayloadMode: PayloadMode;
   ignoreRoutes: RegExp[];
   logBodyIgnoreRoutes: RegExp[];
   logBodyOnlyRoutes: RegExp[];
@@ -385,13 +414,13 @@ let _runtimeCache: RuntimeProfileSummary | null = null;
 
 /**
  * Reads the resolved profile that {@link resolveProfile} stored in
- * `process.env.HAOC_OTEL_RESOLVED_PROFILE` during `setupTracing()`.
+ * `process.env.OTEL_RESOLVED_PROFILE` during `setupTracing()`.
  * Falls back to the default `minimal` profile if `setupTracing` was not
  * called (e.g. in unit tests).
  */
 export function getRuntimeProfile(): RuntimeProfileSummary {
   if (_runtimeCache) return _runtimeCache;
-  const raw = process.env.HAOC_OTEL_RESOLVED_PROFILE;
+  const raw = process.env.OTEL_RESOLVED_PROFILE;
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as {
@@ -400,6 +429,7 @@ export function getRuntimeProfile(): RuntimeProfileSummary {
         captureResponseBody: boolean;
         logRequestBody: boolean;
         logResponseBody: boolean;
+        logPayloadMode?: PayloadMode;
         ignoreRoutes: string[];
         logBodyIgnoreRoutes: string[];
         logBodyOnlyRoutes: string[];
@@ -410,6 +440,7 @@ export function getRuntimeProfile(): RuntimeProfileSummary {
         captureResponseBody: parsed.captureResponseBody,
         logRequestBody: parsed.logRequestBody ?? true,
         logResponseBody: parsed.logResponseBody ?? true,
+        logPayloadMode: parsed.logPayloadMode ?? 'none',
         ignoreRoutes: (parsed.ignoreRoutes ?? []).map(
           (s) => new RegExp(s, 'i'),
         ),
@@ -432,6 +463,7 @@ export function getRuntimeProfile(): RuntimeProfileSummary {
     captureResponseBody: defaults.captureResponseBody,
     logRequestBody: defaults.logRequestBody,
     logResponseBody: defaults.logResponseBody,
+    logPayloadMode: defaults.logPayloadMode,
     ignoreRoutes: [...defaults.ignoreRoutes],
     logBodyIgnoreRoutes: [...defaults.logBodyIgnoreRoutes],
     logBodyOnlyRoutes: [...defaults.logBodyOnlyRoutes],
@@ -462,7 +494,7 @@ export function shouldLogBodyForRoute(
 
 /**
  * Test-only: clears the cached runtime profile so the next call re-reads
- * `process.env.HAOC_OTEL_RESOLVED_PROFILE`.
+ * `process.env.OTEL_RESOLVED_PROFILE`.
  */
 export function _resetRuntimeProfileCache(): void {
   _runtimeCache = null;

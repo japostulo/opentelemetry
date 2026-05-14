@@ -57,34 +57,34 @@ export interface HaocTelemetryConfig {
    * - `standard`: minimal + body/response capture.
    * - `verbose`: legacy "everything on" behaviour.
    *
-   * Overridable via `HAOC_OTEL_PROFILE` env var.
+   * Overridable via `OTEL_PROFILE` env var.
    */
   profile?: HaocProfileName;
 
   /**
    * Head-based sampler ratio for `ParentBased(TraceIdRatioBased)`.
    * Range 0..1. Defaults: 1.0 in dev/local, 0.2 in production.
-   * Overridable via `HAOC_OTEL_SAMPLE_RATIO`.
+   * Overridable via `OTEL_SAMPLE_RATIO`.
    */
   sampleRatio?: number;
 
   /**
    * URL paths to drop entirely (no span created) for incoming HTTP requests.
    * Strings are compiled as case-insensitive regex.
-   * Merged with profile defaults and `HAOC_OTEL_IGNORE_URLS` (CSV of regex).
+   * Merged with profile defaults and `OTEL_IGNORE_URLS` (CSV of regex).
    */
   ignoreIncomingPaths?: (string | RegExp)[];
 
   /**
    * URLs to drop entirely for outgoing HTTP client calls.
-   * Merged with `HAOC_OTEL_IGNORE_OUTGOING_URLS`.
+   * Merged with `OTEL_IGNORE_OUTGOING_URLS`.
    */
   ignoreOutgoingUrls?: (string | RegExp)[];
 
   /**
    * Routes to short-circuit inside the NestJS interceptor / Express
    * middleware (skip body/response capture and request/response logs).
-   * Merged with `HAOC_OTEL_IGNORE_ROUTES`.
+   * Merged with `OTEL_IGNORE_ROUTES`.
    */
   ignoreRoutes?: (string | RegExp)[];
 
@@ -111,7 +111,7 @@ export interface HaocTelemetryConfig {
    * This is independent of `captureRequestBody` which controls span attributes.
    * Default: `true` in all profiles.
    *
-   * Overridable via `HAOC_OTEL_LOG_REQUEST_BODY`.
+   * Overridable via `OTEL_LOG_REQUEST_BODY`.
    */
   logRequestBody?: boolean;
 
@@ -120,7 +120,7 @@ export interface HaocTelemetryConfig {
    * This is independent of `captureResponseBody` which controls span attributes.
    * Default: `true` in all profiles.
    *
-   * Overridable via `HAOC_OTEL_LOG_RESPONSE_BODY`.
+   * Overridable via `OTEL_LOG_RESPONSE_BODY`.
    */
   logResponseBody?: boolean;
 
@@ -130,7 +130,7 @@ export interface HaocTelemetryConfig {
    * sensitive endpoints.
    *
    * Strings are compiled as case-insensitive regex. Merged with
-   * `HAOC_OTEL_LOG_BODY_IGNORE_ROUTES` (CSV of regex).
+   * `OTEL_LOG_BODY_IGNORE_ROUTES` (CSV of regex).
    */
   logBodyIgnoreRoutes?: (string | RegExp)[];
 
@@ -139,13 +139,13 @@ export interface HaocTelemetryConfig {
    * entries. This takes precedence over `logBodyIgnoreRoutes`.
    *
    * Strings are compiled as case-insensitive regex. Merged with
-   * `HAOC_OTEL_LOG_BODY_ONLY_ROUTES` (CSV of regex).
+   * `OTEL_LOG_BODY_ONLY_ROUTES` (CSV of regex).
    */
   logBodyOnlyRoutes?: (string | RegExp)[];
 
   /**
    * Per-instrumentation toggles. Each entry overrides the profile default.
-   * Override individually via `HAOC_OTEL_TRACE_<NAME>` env vars.
+   * Override individually via `OTEL_TRACE_<NAME>` env vars.
    */
   instrumentations?: Partial<ResolvedProfile['instrumentations']>;
 

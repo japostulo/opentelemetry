@@ -3,7 +3,8 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
-import { resourceFromAttributes } from '@opentelemetry/resources';
+import { resourceFromAttributes, processDetector, envDetector, hostDetector, osDetector, serviceInstanceIdDetector } from '@opentelemetry/resources';
+import type { ResourceDetector, DetectedResource, DetectedResourceAttributes } from '@opentelemetry/resources';
 import {
   ATTR_SERVICE_NAME,
   SEMRESATTRS_DEPLOYMENT_ENVIRONMENT,
@@ -163,12 +164,13 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
 
   // Expose resolved profile to interceptor/middleware via process.env so
   // that they don't need to be wired through DI explicitly.
-  process.env.HAOC_OTEL_RESOLVED_PROFILE = JSON.stringify({
+  process.env.OTEL_RESOLVED_PROFILE = JSON.stringify({
     profile: resolved.profile,
     captureRequestBody: resolved.captureRequestBody,
     captureResponseBody: resolved.captureResponseBody,
     logRequestBody: resolved.logRequestBody,
     logResponseBody: resolved.logResponseBody,
+    logPayloadMode: resolved.logPayloadMode,
     ignoreRoutes: resolved.ignoreRoutes.map((r) => r.source),
     logBodyIgnoreRoutes: resolved.logBodyIgnoreRoutes.map((r) => r.source),
     logBodyOnlyRoutes: resolved.logBodyOnlyRoutes.map((r) => r.source),
@@ -190,6 +192,21 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
   // applied per-span by the framework interceptors/middlewares (NestJS
   // `HaocTraceInterceptor`, Express `createTraceMiddleware`) and per-log
   // record by `otelEmit()`.
+
+  // Custom process detector that strips duplicated attrs:
+  //   process.executable.path  — same value as process.executable.name
+  //   process.runtime.description — same value as process.runtime.name
+  const filteredProcessDetector: ResourceDetector = {
+    detect(): DetectedResource {
+      const { attributes } = processDetector.detect();
+      const exclude = new Set(['process.executable.path', 'process.runtime.description']);
+      const filtered = Object.fromEntries(
+        Object.entries(attributes as DetectedResourceAttributes).filter(([k]) => !exclude.has(k)),
+      ) as DetectedResourceAttributes;
+      return { attributes: filtered };
+    },
+  };
+
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]:
       config.serviceName ?? process.env.OTEL_SERVICE_NAME ?? 'unknown',
@@ -239,6 +256,13 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
       }),
     ],
     logRecordProcessors: [logRecordProcessor],
+    resourceDetectors: [
+      envDetector,
+      hostDetector,
+      osDetector,
+      serviceInstanceIdDetector,
+      filteredProcessDetector,
+    ],
     instrumentations: [
       getNodeAutoInstrumentations(instrumentationConfig as never),
     ],
