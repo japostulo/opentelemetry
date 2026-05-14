@@ -16,33 +16,48 @@ import { trace, context } from '@opentelemetry/api';
 // ── Attribute Keys ──────────────────────────────────────────────────────
 
 /** Unique user identifier. Value set by each app's auth layer. */
-export const HAOC_USER_ATTR = 'user.id';
+export const USER_ATTR = 'user.id';
 
 /** User role (e.g. 'admin', 'operator', 'viewer'). Optional. */
-export const HAOC_USER_ROLE_ATTR = 'user.role';
+export const USER_ROLE_ATTR = 'user.role';
 
 /**
  * User type — whether the request is authenticated, anonymous, or
  * from a service-to-service call.
  */
-export const HAOC_USER_TYPE_ATTR = 'user.type';
+export const USER_TYPE_ATTR = 'user.type';
 
 // ── Types ───────────────────────────────────────────────────────────────
 
-export type HaocUserType = 'authenticated' | 'anonymous' | 'service';
+export type UserType = 'authenticated' | 'anonymous' | 'service';
 
-export interface HaocUserIdentity {
+export interface UserIdentity {
   /** Unique user identifier (e.g. user ID, email, azure_id). */
   id: string;
   /** Optional role label. */
   role?: string;
   /** Type of identity. @default 'authenticated' */
-  type?: HaocUserType;
+  type?: UserType;
 }
+
+/** @deprecated Use {@link UserType} instead. */
+export type HaocUserType = UserType;
+
+/** @deprecated Use {@link UserIdentity} instead. */
+export type HaocUserIdentity = UserIdentity;
+
+/** @deprecated Use {@link USER_ATTR} instead. */
+export const HAOC_USER_ATTR = USER_ATTR;
+
+/** @deprecated Use {@link USER_ROLE_ATTR} instead. */
+export const HAOC_USER_ROLE_ATTR = USER_ROLE_ATTR;
+
+/** @deprecated Use {@link USER_TYPE_ATTR} instead. */
+export const HAOC_USER_TYPE_ATTR = USER_TYPE_ATTR;
 
 // ── Context Storage (AsyncLocalStorage — per-request safe) ──────────────
 
-const _storage = new AsyncLocalStorage<HaocUserIdentity | null>();
+const _storage = new AsyncLocalStorage<UserIdentity | null>();
 
 /**
  * Per-trace identity fallback store.
@@ -55,7 +70,7 @@ const _storage = new AsyncLocalStorage<HaocUserIdentity | null>();
  * Storing identity by trace ID allows the interceptor's response hook to
  * reliably look up the user regardless of async context.
  */
-const _perTraceIdentity = new Map<string, HaocUserIdentity>();
+const _perTraceIdentity = new Map<string, UserIdentity>();
 
 /**
  * Stores the current user identity in the request-scoped async context.
@@ -70,7 +85,7 @@ const _perTraceIdentity = new Map<string, HaocUserIdentity>();
  * setUser({ id: user.azureId, role: 'admin', type: 'authenticated' });
  * ```
  */
-export function setUser(identity: HaocUserIdentity): void {
+export function setUser(identity: UserIdentity): void {
   _storage.enterWith(identity);
 }
 
@@ -80,7 +95,7 @@ export function clearUser(): void {
 }
 
 /** Returns the current user identity for this request, or null if not set. */
-export function getUser(): HaocUserIdentity | null {
+export function getUser(): UserIdentity | null {
   return _storage.getStore() ?? null;
 }
 
@@ -106,13 +121,13 @@ export function getUser(): HaocUserIdentity | null {
  * identifyUser({ id: request.user.id, role: request.user.role });
  * ```
  */
-export function identifyUser(identity: HaocUserIdentity): void {
+export function identifyUser(identity: UserIdentity): void {
   setUser(identity);
   const span = trace.getSpan(context.active());
   if (!span) return;
-  span.setAttribute(HAOC_USER_ATTR, identity.id);
-  span.setAttribute(HAOC_USER_TYPE_ATTR, identity.type ?? 'authenticated');
-  if (identity.role) span.setAttribute(HAOC_USER_ROLE_ATTR, identity.role);
+  span.setAttribute(USER_ATTR, identity.id);
+  span.setAttribute(USER_TYPE_ATTR, identity.type ?? 'authenticated');
+  if (identity.role) span.setAttribute(USER_ROLE_ATTR, identity.role);
   // Fallback: store by trace ID so the interceptor's tap() can look it up
   // even when AsyncLocalStorage context propagation fails across RxJS boundaries.
   const traceId = span.spanContext().traceId;
@@ -132,12 +147,12 @@ export function getUserSpanAttributes(): Record<string, string> {
   }
 
   const attrs: Record<string, string> = {
-    [HAOC_USER_ATTR]: user.id,
-    [HAOC_USER_TYPE_ATTR]: user.type ?? 'authenticated',
+    [USER_ATTR]: user.id,
+    [USER_TYPE_ATTR]: user.type ?? 'authenticated',
   };
 
   if (user.role) {
-    attrs[HAOC_USER_ROLE_ATTR] = user.role;
+    attrs[USER_ROLE_ATTR] = user.role;
   }
 
   return attrs;
@@ -152,7 +167,7 @@ export function getUserSpanAttributes(): Record<string, string> {
  *
  * @param traceId - The traceId from `span.spanContext().traceId`
  */
-export function getUserByTraceId(traceId: string): HaocUserIdentity | null {
+export function getUserByTraceId(traceId: string): UserIdentity | null {
   return _perTraceIdentity.get(traceId) ?? null;
 }
 

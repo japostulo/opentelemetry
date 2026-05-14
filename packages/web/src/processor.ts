@@ -1,6 +1,6 @@
 import { Context, propagation } from '@opentelemetry/api';
 import { SpanProcessor, ReadableSpan, Span } from '@opentelemetry/sdk-trace-base';
-import { getUser, HAOC_USER_ATTR, HAOC_USER_TYPE_ATTR, HAOC_USER_ROLE_ATTR } from './identity';
+import { getUser, USER_ATTR, USER_TYPE_ATTR, USER_ROLE_ATTR } from './identity';
 import type { BrowserInfo } from './browser';
 import { matchesAny } from './profile';
 
@@ -135,13 +135,13 @@ export class HaocSpanProcessor implements SpanProcessor {
     // ── User Identity ───────────────────────────────────────────────
     const user = getUser();
     if (user) {
-      span.setAttribute(HAOC_USER_ATTR, user.id);
-      span.setAttribute(HAOC_USER_TYPE_ATTR, user.type ?? 'authenticated');
+      span.setAttribute(USER_ATTR, user.id);
+      span.setAttribute(USER_TYPE_ATTR, user.type ?? 'authenticated');
       if (user.role) {
-        span.setAttribute(HAOC_USER_ROLE_ATTR, user.role);
+        span.setAttribute(USER_ROLE_ATTR, user.role);
       }
     } else {
-      span.setAttribute(HAOC_USER_TYPE_ATTR, 'anonymous');
+      span.setAttribute(USER_TYPE_ATTR, 'anonymous');
     }
 
     // ── Baggage Propagation ─────────────────────────────────────────

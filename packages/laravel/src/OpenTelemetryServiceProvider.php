@@ -21,11 +21,11 @@ use OpenTelemetry\Contrib\Otlp\LogsExporter;
 use OpenTelemetry\Contrib\Otlp\ContentTypes;
 use OpenTelemetry\Contrib\Otlp\OtlpHttpTransportFactory;
 
-class HaocOpenTelemetryServiceProvider extends ServiceProvider
+class OpenTelemetryServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../config/haoc-otel.php', 'haoc-otel');
+        $this->mergeConfigFrom(__DIR__ . '/../config/otel.php', 'otel');
 
         // ── Profile (resolved per-resolution so runtime config changes
         //    via Config::set() take effect on the very next request — the
@@ -33,17 +33,15 @@ class HaocOpenTelemetryServiceProvider extends ServiceProvider
         //    because the container builds the middleware fresh per
         //    request).
         $this->app->bind(Profile::class, function () {
-            return Profile::fromConfig(config('haoc-otel'));
+            return Profile::fromConfig(config('otel'));
         });
 
-        // NOTE: `haoc.otel.profile` is intentionally NOT included as a
-        // resource attribute. The active profile can change at runtime
-        // via /admin/config and Resource attrs are immutable post-init;
-        // we want every span/log to carry the *current* profile. The
-        // attribute is therefore applied per-span by `TraceRequest`
-        // middleware and per-log by `OtelHandler::write()`.
+        // NOTE: the active profile is NOT included as a resource attribute.
+        // It can change at runtime via Config::set(); Resource attrs are
+        // immutable post-init. The profile attribute is applied per-span
+        // by `TraceRequest` middleware and per-log by `OtelHandler::write()`.
         $this->app->singleton('otel.resource', function ($app) {
-            $config = config('haoc-otel');
+            $config = config('otel');
 
             return ResourceInfo::create(Attributes::create([
                 ResourceAttributes::SERVICE_NAME => $config['service_name'],
@@ -54,7 +52,7 @@ class HaocOpenTelemetryServiceProvider extends ServiceProvider
 
         // ── Trace Provider (Batch + ParentBased(TraceIdRatio)) ───────────
         $this->app->singleton(TracerProviderInterface::class, function ($app) {
-            $endpoint = config('haoc-otel.endpoint');
+            $endpoint = config('otel.endpoint');
             $profile  = $app->make(Profile::class);
 
             $transport = (new OtlpHttpTransportFactory())->create(
@@ -80,12 +78,12 @@ class HaocOpenTelemetryServiceProvider extends ServiceProvider
 
         $this->app->singleton(TracerInterface::class, function ($app) {
             return $app->make(TracerProviderInterface::class)
-                ->getTracer(config('haoc-otel.service_name'));
+                ->getTracer(config('otel.service_name'));
         });
 
-        // ── Log Provider (Batch) ─────────────────────────────────────────
+        // ── Log Provider (Batch) ───────────────────────────────────
         $this->app->singleton(LoggerProvider::class, function ($app) {
-            $endpoint = config('haoc-otel.endpoint');
+            $endpoint = config('otel.endpoint');
 
             $transport = (new OtlpHttpTransportFactory())->create(
                 $endpoint . '/v1/logs',
@@ -105,15 +103,15 @@ class HaocOpenTelemetryServiceProvider extends ServiceProvider
 
         $this->app->singleton(LoggerInterface::class, function ($app) {
             return $app->make(LoggerProvider::class)
-                ->getLogger(config('haoc-otel.service_name'));
+                ->getLogger(config('otel.service_name'));
         });
     }
 
     public function boot(): void
     {
         $this->publishes([
-            __DIR__ . '/../config/haoc-otel.php' => config_path('haoc-otel.php'),
-        ], 'haoc-otel-config');
+            __DIR__ . '/../config/otel.php' => config_path('otel.php'),
+        ], 'otel-config');
 
         $this->app->terminating(function () {
             $traceProvider = $this->app->make(TracerProviderInterface::class);

@@ -1,5 +1,5 @@
 /**
- * Profile resolver for HAOC OpenTelemetry (Web).
+ * Profile resolver for OpenTelemetry (Web).
  *
  * Three named profiles:
  *   - `minimal` (default): only fetch/XHR to whitelisted API URLs + errors.
@@ -8,10 +8,12 @@
  *   - `verbose`: legacy "everything on" behaviour.
  */
 
-export type HaocWebProfileName = 'minimal' | 'standard' | 'verbose';
+export type OtelWebProfileName = 'minimal' | 'standard' | 'verbose';
+/** @deprecated Use {@link OtelWebProfileName} */
+export type HaocWebProfileName = OtelWebProfileName;
 
 export interface ResolvedWebProfile {
-  profile: HaocWebProfileName;
+  profile: OtelWebProfileName;
   sampleRatio: number;
   ignoreUrls: RegExp[];
   ignoreErrorMessages: RegExp[];
@@ -35,7 +37,7 @@ const DEFAULT_IGNORE_ERRORS: RegExp[] = [
   /Non-Error promise rejection captured/i,
 ];
 
-const PROFILES: Record<HaocWebProfileName, ResolvedWebProfile> = {
+const PROFILES: Record<OtelWebProfileName, ResolvedWebProfile> = {
   minimal: {
     profile: 'minimal',
     sampleRatio: 1.0,
@@ -106,7 +108,7 @@ export function parsePatternList(
 }
 
 export interface WebProfileOverrides {
-  profile?: HaocWebProfileName;
+  profile?: OtelWebProfileName;
   sampleRatio?: number;
   ignoreUrls?: (string | RegExp)[];
   ignoreErrorMessages?: (string | RegExp)[];
@@ -142,10 +144,10 @@ export function resolveWebProfile(
     ((globalThis as { process?: { env?: Record<string, string | undefined> } })
       .process?.env as Record<string, string | undefined> | undefined);
 
-  const profileName: HaocWebProfileName =
+  const profileName: OtelWebProfileName =
     overrides.profile ??
     ((pickEnv(env, 'OTEL_PROFILE', 'VITE_OTEL_PROFILE') as
-      | HaocWebProfileName
+      | OtelWebProfileName
       | undefined) ??
       'minimal');
 

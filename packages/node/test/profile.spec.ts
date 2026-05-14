@@ -6,7 +6,7 @@ import {
   matchesAny,
   parsePatternList,
   resolveProfile,
-  type HaocProfileName,
+  type OtelProfileName,
 } from '../src/tracing/profile';
 
 const HAOC_KEYS = [
@@ -168,7 +168,7 @@ describe('resolveProfile — named profiles', () => {
   it('falls back to minimal when an unknown profile name is passed', () => {
     // Cast to bypass TS check; runtime should still recover.
     const p = resolveProfile({
-      profile: 'bogus' as HaocProfileName,
+      profile: 'bogus' as OtelProfileName,
       ignoreEnv: true,
     });
     // The profile name field reflects what the caller asked for...

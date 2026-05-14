@@ -8,9 +8,11 @@ const LOGGER_VERSION = '1.2.0';
  * Internal marker attribute added to every `otelEmit` record.
  * Used by {@link GatedLogExporter} to drop duplicate records emitted by
  * `@opentelemetry/instrumentation-pino` when the pino logger is also
- * called with the same `haoc.log.event` payload.
+ * called with the same `log.event` payload.
  */
-export const HAOC_DIRECT_EMIT_ATTR = 'haoc.direct_emit';
+export const OTEL_DIRECT_EMIT_ATTR = 'otel.direct_emit';
+/** @deprecated Use {@link OTEL_DIRECT_EMIT_ATTR} */
+export const HAOC_DIRECT_EMIT_ATTR = OTEL_DIRECT_EMIT_ATTR;
 
 /**
  * Emits a log record directly to the OpenTelemetry logs API, bypassing
@@ -53,7 +55,7 @@ export function otelEmit(
       body: bodyValue,
       attributes: {
         ...attributes,
-        [HAOC_DIRECT_EMIT_ATTR]: true,
+        [OTEL_DIRECT_EMIT_ATTR]: true,
       } as unknown as AnyValueMap,
     });
 }

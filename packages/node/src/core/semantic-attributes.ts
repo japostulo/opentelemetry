@@ -1,5 +1,5 @@
 /**
- * OpenTelemetry Semantic Conventions (v1.24+) and HAOC institutional
+ * OpenTelemetry Semantic Conventions (v1.24+) and custom
  * attribute names.
  *
  * Use these constants in middleware, interceptors, and span processors to
@@ -55,48 +55,64 @@ export const ATTR_HTTP_METHOD_LEGACY = 'http.method';
  */
 export const ATTR_HTTP_STATUS_CODE_LEGACY = 'http.status_code';
 
-// ── HAOC institutional attributes ─────────────────────────────────────────
+// ── Custom attributes ─────────────────────────────────────────────────────
 
 /** Active observability profile: minimal | standard | verbose */
-export const ATTR_HAOC_PROFILE = 'otel.profile';
+export const ATTR_OTEL_PROFILE = 'otel.profile';
+/** @deprecated Use {@link ATTR_OTEL_PROFILE} */
+export const ATTR_HAOC_PROFILE = ATTR_OTEL_PROFILE;
 
 /** Boolean: true when the span represents an HTTP OPTIONS preflight request */
-export const ATTR_HAOC_IS_PREFLIGHT = 'http.is_preflight';
+export const ATTR_HTTP_IS_PREFLIGHT = 'http.is_preflight';
+/** @deprecated Use {@link ATTR_HTTP_IS_PREFLIGHT} */
+export const ATTR_HAOC_IS_PREFLIGHT = ATTR_HTTP_IS_PREFLIGHT;
 
-/** Structured event type for HAOC log records — see {@link HaocLogEvent} */
-export const ATTR_HAOC_LOG_EVENT = 'log.event';
+/** Structured event type for log records — see {@link LogEvent} */
+export const ATTR_LOG_EVENT = 'log.event';
+/** @deprecated Use {@link ATTR_LOG_EVENT} */
+export const ATTR_HAOC_LOG_EVENT = ATTR_LOG_EVENT;
 
 /** One-line human-readable log title for log indexing and search. */
-export const ATTR_HAOC_LOG_TITLE = 'log.title';
+export const ATTR_LOG_TITLE = 'log.title';
+/** @deprecated Use {@link ATTR_LOG_TITLE} */
+export const ATTR_HAOC_LOG_TITLE = ATTR_LOG_TITLE;
 
 /**
  * Request payload as a sanitized JSON string attribute.
  * Used in `standard` and `verbose` profiles.
  * Set in log records; never flattened into individual attributes.
  */
-export const ATTR_HAOC_REQUEST_JSON = 'request.json';
+export const ATTR_REQUEST_JSON = 'request.json';
+/** @deprecated Use {@link ATTR_REQUEST_JSON} */
+export const ATTR_HAOC_REQUEST_JSON = ATTR_REQUEST_JSON;
 
 /**
  * Response payload as a sanitized JSON string attribute.
  * Used in `standard` and `verbose` profiles.
  */
-export const ATTR_HAOC_RESPONSE_JSON = 'response.json';
+export const ATTR_RESPONSE_JSON = 'response.json';
+/** @deprecated Use {@link ATTR_RESPONSE_JSON} */
+export const ATTR_HAOC_RESPONSE_JSON = ATTR_RESPONSE_JSON;
 
 /**
  * Error payload as a sanitized JSON string attribute.
  * Set when the request fails with a structured error body.
  */
-export const ATTR_HAOC_ERROR_JSON = 'error.json';
+export const ATTR_ERROR_JSON = 'error.json';
+/** @deprecated Use {@link ATTR_ERROR_JSON} */
+export const ATTR_HAOC_ERROR_JSON = ATTR_ERROR_JSON;
 
-// ── haoc.log.event values ─────────────────────────────────────────────────
+// ── log.event values ──────────────────────────────────────────────────────
 
-export type HaocLogEvent =
+export type LogEvent =
   | 'http.request'
   | 'http.response'
   | 'http.error'
   | 'http.preflight';
+/** @deprecated Use {@link LogEvent} */
+export type HaocLogEvent = LogEvent;
 
-export const LOG_EVENT_REQUEST: HaocLogEvent   = 'http.request';
-export const LOG_EVENT_RESPONSE: HaocLogEvent  = 'http.response';
-export const LOG_EVENT_ERROR: HaocLogEvent     = 'http.error';
-export const LOG_EVENT_PREFLIGHT: HaocLogEvent = 'http.preflight';
+export const LOG_EVENT_REQUEST: LogEvent   = 'http.request';
+export const LOG_EVENT_RESPONSE: LogEvent  = 'http.response';
+export const LOG_EVENT_ERROR: LogEvent     = 'http.error';
+export const LOG_EVENT_PREFLIGHT: LogEvent = 'http.preflight';

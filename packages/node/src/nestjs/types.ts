@@ -1,11 +1,11 @@
 import type { LoggerConfig } from '../logger/types';
 
 /**
- * Configuration for {@link HaocLoggerModule.forRoot}.
+ * Configuration for {@link OtelModule.forRoot}.
  *
  * Every field is optional — sensible defaults are applied.
  */
-export interface HaocModuleConfig extends LoggerConfig {
+export interface OtelModuleConfig extends LoggerConfig {
   /**
    * Extra field names to treat as sensitive in request/response flattening.
    * Merged with the library defaults (password, token, etc.).
@@ -33,3 +33,6 @@ export interface HaocModuleConfig extends LoggerConfig {
    */
   disableTraceInterceptor?: boolean;
 }
+
+/** @deprecated Use {@link OtelModuleConfig} */
+export type HaocModuleConfig = OtelModuleConfig;

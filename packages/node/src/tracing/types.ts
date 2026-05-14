@@ -2,11 +2,11 @@ import type { Span } from '@opentelemetry/api';
 import type { LogDestination } from '../logger/types';
 import type {
   ExpressIgnoreLayer,
-  HaocProfileName,
+  OtelProfileName,
   ResolvedProfile,
 } from './profile';
 
-export interface HaocTelemetryConfig {
+export interface OtelConfig {
   /**
    * The service name reported in traces, metrics, and logs.
    */
@@ -59,7 +59,7 @@ export interface HaocTelemetryConfig {
    *
    * Overridable via `OTEL_PROFILE` env var.
    */
-  profile?: HaocProfileName;
+  profile?: OtelProfileName;
 
   /**
    * Head-based sampler ratio for `ParentBased(TraceIdRatioBased)`.
@@ -166,3 +166,6 @@ export interface HaocTelemetryConfig {
    */
   additionalResourceAttributes?: Record<string, string>;
 }
+
+/** @deprecated Use {@link OtelConfig} */
+export type HaocTelemetryConfig = OtelConfig;

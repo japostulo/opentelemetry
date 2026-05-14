@@ -12,6 +12,13 @@ import {
   ATTR_NETWORK_PROTOCOL_VERSION,
   ATTR_HTTP_METHOD_LEGACY,
   ATTR_HTTP_STATUS_CODE_LEGACY,
+  ATTR_OTEL_PROFILE,
+  ATTR_HTTP_IS_PREFLIGHT,
+  ATTR_LOG_EVENT,
+  ATTR_REQUEST_JSON,
+  ATTR_RESPONSE_JSON,
+  ATTR_ERROR_JSON,
+  // deprecated aliases
   ATTR_HAOC_PROFILE,
   ATTR_HAOC_IS_PREFLIGHT,
   ATTR_HAOC_LOG_EVENT,
@@ -82,29 +89,55 @@ describe('semantic-attributes', () => {
     });
   });
 
-  describe('HAOC institutional attributes', () => {
-    it("ATTR_HAOC_PROFILE = 'otel.profile'", () => {
-      expect(ATTR_HAOC_PROFILE).toBe('otel.profile');
+  describe('Custom attributes (canonical names)', () => {
+    it("ATTR_OTEL_PROFILE = 'otel.profile'", () => {
+      expect(ATTR_OTEL_PROFILE).toBe('otel.profile');
     });
 
-    it("ATTR_HAOC_IS_PREFLIGHT = 'http.is_preflight'", () => {
-      expect(ATTR_HAOC_IS_PREFLIGHT).toBe('http.is_preflight');
+    it("ATTR_HTTP_IS_PREFLIGHT = 'http.is_preflight'", () => {
+      expect(ATTR_HTTP_IS_PREFLIGHT).toBe('http.is_preflight');
     });
 
-    it("ATTR_HAOC_LOG_EVENT = 'log.event'", () => {
-      expect(ATTR_HAOC_LOG_EVENT).toBe('log.event');
+    it("ATTR_LOG_EVENT = 'log.event'", () => {
+      expect(ATTR_LOG_EVENT).toBe('log.event');
     });
 
-    it("ATTR_HAOC_REQUEST_JSON = 'request.json'", () => {
-      expect(ATTR_HAOC_REQUEST_JSON).toBe('request.json');
+    it("ATTR_REQUEST_JSON = 'request.json'", () => {
+      expect(ATTR_REQUEST_JSON).toBe('request.json');
     });
 
-    it("ATTR_HAOC_RESPONSE_JSON = 'response.json'", () => {
-      expect(ATTR_HAOC_RESPONSE_JSON).toBe('response.json');
+    it("ATTR_RESPONSE_JSON = 'response.json'", () => {
+      expect(ATTR_RESPONSE_JSON).toBe('response.json');
     });
 
-    it("ATTR_HAOC_ERROR_JSON = 'error.json'", () => {
-      expect(ATTR_HAOC_ERROR_JSON).toBe('error.json');
+    it("ATTR_ERROR_JSON = 'error.json'", () => {
+      expect(ATTR_ERROR_JSON).toBe('error.json');
+    });
+  });
+
+  describe('Deprecated HAOC aliases (backward compat)', () => {
+    it("ATTR_HAOC_PROFILE === ATTR_OTEL_PROFILE", () => {
+      expect(ATTR_HAOC_PROFILE).toBe(ATTR_OTEL_PROFILE);
+    });
+
+    it("ATTR_HAOC_IS_PREFLIGHT === ATTR_HTTP_IS_PREFLIGHT", () => {
+      expect(ATTR_HAOC_IS_PREFLIGHT).toBe(ATTR_HTTP_IS_PREFLIGHT);
+    });
+
+    it("ATTR_HAOC_LOG_EVENT === ATTR_LOG_EVENT", () => {
+      expect(ATTR_HAOC_LOG_EVENT).toBe(ATTR_LOG_EVENT);
+    });
+
+    it("ATTR_HAOC_REQUEST_JSON === ATTR_REQUEST_JSON", () => {
+      expect(ATTR_HAOC_REQUEST_JSON).toBe(ATTR_REQUEST_JSON);
+    });
+
+    it("ATTR_HAOC_RESPONSE_JSON === ATTR_RESPONSE_JSON", () => {
+      expect(ATTR_HAOC_RESPONSE_JSON).toBe(ATTR_RESPONSE_JSON);
+    });
+
+    it("ATTR_HAOC_ERROR_JSON === ATTR_ERROR_JSON", () => {
+      expect(ATTR_HAOC_ERROR_JSON).toBe(ATTR_ERROR_JSON);
     });
   });
 

@@ -20,7 +20,7 @@ import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { URL } from 'node:url';
 
-import type { HaocTelemetryConfig } from './types';
+import type { OtelConfig } from './types';
 import { GatedLogExporter } from '../logger/gated-exporter';
 import {
   matchesAny,
@@ -56,7 +56,7 @@ function resolveOtlpEndpoint(configEndpoint?: string): string {
 function buildInstrumentationConfig(
   resolved: ResolvedProfile,
   environment: string,
-  userHook?: HaocTelemetryConfig['httpRequestHook'],
+  userHook?: OtelConfig['httpRequestHook'],
 ): Record<string, unknown> {
   const cfg: Record<string, unknown> = {};
 
@@ -126,7 +126,7 @@ function buildInstrumentationConfig(
  * setupTracing({ serviceName: 'my-api', profile: 'minimal' });
  * ```
  */
-export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
+export function setupTracing(config: OtelConfig): NodeSDK {
   const environment =
     config.environment ??
     process.env.OTEL_ENVIRONMENT ??
@@ -190,7 +190,7 @@ export function setupTracing(config: HaocTelemetryConfig): NodeSDK {
   // profile can change at runtime via /admin/config and we want every
   // span/log to reflect the *current* profile. The attribute is therefore
   // applied per-span by the framework interceptors/middlewares (NestJS
-  // `HaocTraceInterceptor`, Express `createTraceMiddleware`) and per-log
+  // `OtelInterceptor`, Express `createTraceMiddleware`) and per-log
   // record by `otelEmit()`.
 
   // Custom process detector that strips duplicated attrs:

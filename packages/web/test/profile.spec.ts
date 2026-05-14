@@ -4,7 +4,7 @@ import {
   matchesAny,
   parsePatternList,
   resolveWebProfile,
-  type HaocWebProfileName,
+  type OtelWebProfileName,
 } from '../src/profile';
 
 // ───────────────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ describe('resolveWebProfile — named profiles', () => {
 
   it('falls back to minimal baseline on unknown profile names', () => {
     const p = resolveWebProfile({
-      profile: 'bogus' as HaocWebProfileName,
+      profile: 'bogus' as OtelWebProfileName,
       env: {},
     });
     expect(p.enableDocumentLoad).toBe(false);

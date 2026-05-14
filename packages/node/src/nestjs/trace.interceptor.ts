@@ -22,12 +22,12 @@ import {
   ATTR_HTTP_ROUTE,
   ATTR_URL_PATH,
   ATTR_USER_AGENT_ORIGINAL,
-  ATTR_HAOC_PROFILE,
-  ATTR_HAOC_IS_PREFLIGHT,
-  ATTR_HAOC_LOG_EVENT,
-  ATTR_HAOC_LOG_TITLE,
-  ATTR_HAOC_REQUEST_JSON,
-  ATTR_HAOC_ERROR_JSON,
+  ATTR_OTEL_PROFILE,
+  ATTR_HTTP_IS_PREFLIGHT,
+  ATTR_LOG_EVENT,
+  ATTR_LOG_TITLE,
+  ATTR_REQUEST_JSON,
+  ATTR_ERROR_JSON,
   LOG_EVENT_REQUEST,
   LOG_EVENT_RESPONSE,
   LOG_EVENT_ERROR,
@@ -50,12 +50,14 @@ export interface TraceInterceptorOptions {
  * @example
  * ```ts
  * {
- *   provide: HAOC_SENSITIVE_FIELDS,
+ *   provide: OTEL_SENSITIVE_FIELDS,
  *   useValue: mergeSensitiveFields(['cpf', 'rg']),
  * }
  * ```
  */
-export const HAOC_SENSITIVE_FIELDS = 'HAOC_SENSITIVE_FIELDS';
+export const OTEL_SENSITIVE_FIELDS = 'OTEL_SENSITIVE_FIELDS';
+/** @deprecated Use {@link OTEL_SENSITIVE_FIELDS} */
+export const HAOC_SENSITIVE_FIELDS = OTEL_SENSITIVE_FIELDS;
 
 /**
  * NestJS HTTP interceptor that correlates every request/response with the
@@ -63,17 +65,17 @@ export const HAOC_SENSITIVE_FIELDS = 'HAOC_SENSITIVE_FIELDS';
  *
  * Register globally in your AppModule:
  * ```ts
- * { provide: APP_INTERCEPTOR, useClass: HaocTraceInterceptor }
+ * { provide: APP_INTERCEPTOR, useClass: OtelInterceptor }
  * ```
  */
 @Injectable()
-export class HaocTraceInterceptor implements NestInterceptor {
+export class OtelInterceptor implements NestInterceptor {
   private readonly sensitiveFields: Set<string>;
 
   constructor(
     @InjectPinoLogger('HTTP') private readonly logger: PinoLogger,
     @Optional()
-    @Inject(HAOC_SENSITIVE_FIELDS)
+    @Inject(OTEL_SENSITIVE_FIELDS)
     customSensitiveFields?: Set<string>,
   ) {
     this.sensitiveFields = customSensitiveFields ?? DEFAULT_SENSITIVE_FIELDS;
@@ -105,7 +107,7 @@ export class HaocTraceInterceptor implements NestInterceptor {
     // ── Preflight (OPTIONS) policy ────────────────────────────────────
     const preflight = evaluatePreflight(method, runtime.profile);
     if (preflight.isPreflight && activeSpan) {
-      activeSpan.setAttribute(ATTR_HAOC_IS_PREFLIGHT, true);
+      activeSpan.setAttribute(ATTR_HTTP_IS_PREFLIGHT, true);
     }
 
     const captureBody = runtime.captureRequestBody;
@@ -133,7 +135,7 @@ export class HaocTraceInterceptor implements NestInterceptor {
       if (request.headers?.['user-agent']) {
         activeSpan.setAttribute(ATTR_USER_AGENT_ORIGINAL, String(request.headers['user-agent']));
       }
-      activeSpan.setAttribute(ATTR_HAOC_PROFILE, runtime.profile);
+      activeSpan.setAttribute(ATTR_OTEL_PROFILE, runtime.profile);
       activeSpan.setAttribute(
         'environment',
         process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
@@ -179,9 +181,9 @@ export class HaocTraceInterceptor implements NestInterceptor {
       const reqAttrs: AttrRecord = {
         [ATTR_HTTP_REQUEST_METHOD]: method,
         [ATTR_HTTP_ROUTE]: route,
-        [ATTR_HAOC_PROFILE]: runtime.profile,
-        [ATTR_HAOC_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
-        [ATTR_HAOC_LOG_TITLE]: `${method} ${route} [${traceId}]`,
+        [ATTR_OTEL_PROFILE]: runtime.profile,
+        [ATTR_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
+        [ATTR_LOG_TITLE]: `${method} ${route} [${traceId}]`,
       };
       if (rawQuery) flattenToRecord(reqAttrs, 'request.query', rawQuery, 0, this.sensitiveFields);
       if (rawParams) flattenToRecord(reqAttrs, 'request.params', rawParams, 0, this.sensitiveFields);
@@ -189,7 +191,7 @@ export class HaocTraceInterceptor implements NestInterceptor {
       if (logBody && inputPayload) {
         if (logPayloadMode === 'json-attr') {
           const json = sanitizeToJsonAttr(inputPayload, { sensitiveFields: this.sensitiveFields, maxBytes: 16 * 1024 });
-          if (json) reqAttrs[ATTR_HAOC_REQUEST_JSON] = json;
+          if (json) reqAttrs[ATTR_REQUEST_JSON] = json;
         } else if (logPayloadMode === 'flatten') {
           flattenToRecord(reqAttrs, 'body', inputPayload, 0, this.sensitiveFields);
         }
@@ -203,9 +205,9 @@ export class HaocTraceInterceptor implements NestInterceptor {
           ? sanitizeNested(inputPayload, this.sensitiveFields) as Record<string, unknown>
           : `${method} ${route} [${traceId}]`,
         {
-          [ATTR_HAOC_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
-          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} [${traceId}]`,
-          [ATTR_HAOC_PROFILE]: runtime.profile,
+          [ATTR_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
+          [ATTR_LOG_TITLE]: `${method} ${route} [${traceId}]`,
+          [ATTR_OTEL_PROFILE]: runtime.profile,
           ...userAttrs,
         },
       );
@@ -228,9 +230,9 @@ export class HaocTraceInterceptor implements NestInterceptor {
           [ATTR_HTTP_ROUTE]: route,
           [ATTR_HTTP_RESPONSE_STATUS_CODE]: statusCode,
           'http.duration_ms': duration,
-          [ATTR_HAOC_PROFILE]: runtime.profile,
-          [ATTR_HAOC_LOG_EVENT]: LOG_EVENT_RESPONSE,
-          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+          [ATTR_OTEL_PROFILE]: runtime.profile,
+          [ATTR_LOG_EVENT]: LOG_EVENT_RESPONSE,
+          [ATTR_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
         };
 
         if (activeSpan) {
@@ -272,9 +274,9 @@ export class HaocTraceInterceptor implements NestInterceptor {
             ? sanitizeNested(responseBody, this.sensitiveFields) as Record<string, unknown>
             : `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
           {
-            [ATTR_HAOC_LOG_EVENT]: LOG_EVENT_RESPONSE,
-            [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
-            [ATTR_HAOC_PROFILE]: runtime.profile,
+            [ATTR_LOG_EVENT]: LOG_EVENT_RESPONSE,
+            [ATTR_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+            [ATTR_OTEL_PROFILE]: runtime.profile,
             ...userAttrsOnRes,
           },
         );
@@ -302,9 +304,9 @@ export class HaocTraceInterceptor implements NestInterceptor {
           [ATTR_HTTP_ROUTE]: route,
           [ATTR_HTTP_RESPONSE_STATUS_CODE]: statusCode,
           'http.duration_ms': duration,
-          [ATTR_HAOC_PROFILE]: runtime.profile,
-          [ATTR_HAOC_LOG_EVENT]: LOG_EVENT_ERROR,
-          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+          [ATTR_OTEL_PROFILE]: runtime.profile,
+          [ATTR_LOG_EVENT]: LOG_EVENT_ERROR,
+          [ATTR_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
           'error.message': String(err.message),
           'error.type': err.constructor?.name || 'Error',
         };
@@ -312,7 +314,7 @@ export class HaocTraceInterceptor implements NestInterceptor {
         const errorJson = (errorResponse && typeof errorResponse === 'object')
           ? sanitizeToJsonAttr(errorResponse, { sensitiveFields: this.sensitiveFields })
           : undefined;
-        if (errorJson) errAttrs[ATTR_HAOC_ERROR_JSON] = errorJson;
+        if (errorJson) errAttrs[ATTR_ERROR_JSON] = errorJson;
 
         if (logResponse && errorResponse && typeof errorResponse === 'object' && logPayloadMode === 'flatten') {
           flattenToRecord(errAttrs, 'error.response', errorResponse, 0, this.sensitiveFields);
@@ -328,11 +330,11 @@ export class HaocTraceInterceptor implements NestInterceptor {
         otelEmit('error',
           `${method} ${route} ${statusCode} ${duration}ms [${traceId}] ${err.message}`,
           {
-            [ATTR_HAOC_LOG_EVENT]: LOG_EVENT_ERROR,
-            [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
-            [ATTR_HAOC_PROFILE]: runtime.profile,
+            [ATTR_LOG_EVENT]: LOG_EVENT_ERROR,
+            [ATTR_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+            [ATTR_OTEL_PROFILE]: runtime.profile,
             ...userAttrsOnErr,
-            ...(errorJson ? { [ATTR_HAOC_ERROR_JSON]: errorJson } : {}),
+            ...(errorJson ? { [ATTR_ERROR_JSON]: errorJson } : {}),
           },
         );
 
@@ -344,3 +346,6 @@ export class HaocTraceInterceptor implements NestInterceptor {
     );
   }
 }
+
+/** @deprecated Use {@link OtelInterceptor} instead. */
+export const HaocTraceInterceptor = OtelInterceptor;

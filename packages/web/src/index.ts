@@ -3,9 +3,12 @@ export {
   initTracing,
   resolveWebProfile,
   matchesAny,
+  type OtelWebConfig,
+  type OtelWebProfileName,
+  type ResolvedWebProfile,
+  // deprecated aliases
   type HaocWebConfig,
   type HaocWebProfileName,
-  type ResolvedWebProfile,
 } from './tracing';
 
 // ── Page Context ────────────────────────────────────────────────────────
@@ -13,12 +16,18 @@ export { setCurrentRoute } from './processor';
 
 // ── Identity ────────────────────────────────────────────────────────────
 export {
-  HAOC_USER_ATTR,
-  HAOC_USER_ROLE_ATTR,
-  HAOC_USER_TYPE_ATTR,
+  USER_ATTR,
+  USER_ROLE_ATTR,
+  USER_TYPE_ATTR,
   setUser,
   clearUser,
   getUser,
+  type UserIdentity,
+  type UserType,
+  // deprecated aliases
+  HAOC_USER_ATTR,
+  HAOC_USER_ROLE_ATTR,
+  HAOC_USER_TYPE_ATTR,
   type HaocUserIdentity,
   type HaocUserType,
 } from './identity';

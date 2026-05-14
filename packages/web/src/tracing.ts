@@ -24,10 +24,10 @@ import { installErrorHandlers } from './errors';
 import {
   matchesAny,
   resolveWebProfile,
-  type HaocWebProfileName,
+  type OtelWebProfileName,
 } from './profile';
 
-export interface HaocWebConfig {
+export interface OtelWebConfig {
   /**
    * Service name reported in traces (e.g. 'totem-client').
    */
@@ -75,7 +75,7 @@ export interface HaocWebConfig {
    *
    * Overridable via `VITE_OTEL_PROFILE` / `OTEL_PROFILE`.
    */
-  profile?: HaocWebProfileName;
+  profile?: OtelWebProfileName;
 
   /**
    * Head-based sampler ratio for `ParentBased(TraceIdRatioBased)`.
@@ -141,7 +141,7 @@ export interface HaocWebConfig {
 }
 
 /**
- * Initializes HAOC OpenTelemetry for web frontends.
+ * Initializes OpenTelemetry for web frontends.
  *
  * Sets up:
  * - WebTracerProvider with OTLP exporter and ParentBased(TraceIdRatio)
@@ -161,14 +161,14 @@ export interface HaocWebConfig {
  * import { initTracing } from '@haocruz/opentelemetry-web';
  * initTracing({
  *   serviceName: 'totem-client',
- *   otlpEndpoint: 'http://signoz.haoc.net:4318/v1/traces',
+ *   otlpEndpoint: 'http://signoz:4318/v1/traces',
  *   environment: 'production',
- *   apiUrls: [/https?:\/\/api\.totem\.haoc/],
+ *   apiUrls: [/https?:\/\/api\.example\.com/],
  *   env: import.meta.env as Record<string, string | undefined>,
  * });
  * ```
  */
-export function initTracing(config: HaocWebConfig): WebTracerProvider {
+export function initTracing(config: OtelWebConfig): WebTracerProvider {
   const endpoint = config.otlpEndpoint ?? 'http://localhost:4318/v1/traces';
   const environment = config.environment ?? 'local';
 
@@ -318,4 +318,7 @@ export function initTracing(config: HaocWebConfig): WebTracerProvider {
 
 // Re-export profile helpers so consumers can introspect resolution.
 export { resolveWebProfile, matchesAny } from './profile';
-export type { HaocWebProfileName, ResolvedWebProfile } from './profile';
+export type { OtelWebProfileName, HaocWebProfileName, ResolvedWebProfile } from './profile';
+
+/** @deprecated Use {@link OtelWebConfig} */
+export type HaocWebConfig = OtelWebConfig;

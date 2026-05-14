@@ -6,14 +6,14 @@ import type { ExportResult } from '@opentelemetry/core';
 import { ExportResultCode } from '@opentelemetry/core';
 
 import { isOtlpEnabled } from './config';
-import { HAOC_DIRECT_EMIT_ATTR } from './otel-emit';
+import { OTEL_DIRECT_EMIT_ATTR } from './otel-emit';
 
 /**
  * Attribute key added by the pino OTel instrumentation to identify
  * records that came via pino's log bridge.
  * @see https://opentelemetry.io/docs/specs/otel/logs/data-model/
  */
-const PINO_HAOC_LOG_EVENT = 'log.event';
+const PINO_LOG_EVENT_ATTR = 'log.event';
 
 /**
  * Wraps a {@link LogRecordExporter} so that {@link export} becomes a
@@ -49,14 +49,14 @@ export class GatedLogExporter implements LogRecordExporter {
       return;
     }
 
-    // Drop pino-auto-instrumented duplicates of HAOC trace events.
-    // A record is a duplicate if it carries `log.event` (HAOC trace attr)
-    // but does NOT carry `haoc.direct_emit` (our own marker).
+    // Drop pino-auto-instrumented duplicates of trace events.
+    // A record is a duplicate if it carries `log.event` (trace attr)
+    // but does NOT carry `otel.direct_emit` (our own marker).
     const filtered = logs.filter((record) => {
       const attrs = record.attributes as Record<string, unknown>;
-      const hasLogEvent = attrs[PINO_HAOC_LOG_EVENT] !== undefined;
-      const isDirectEmit = attrs[HAOC_DIRECT_EMIT_ATTR] === true;
-      // Keep all non-HAOC-event records, and only keep HAOC events that
+      const hasLogEvent = attrs[PINO_LOG_EVENT_ATTR] !== undefined;
+      const isDirectEmit = attrs[OTEL_DIRECT_EMIT_ATTR] === true;
+      // Keep all non-event records, and only keep events that
       // came via otelEmit (not via pino instrumentation).
       return !hasLogEvent || isDirectEmit;
     });
@@ -69,7 +69,7 @@ export class GatedLogExporter implements LogRecordExporter {
     // Strip the internal dedup marker before forwarding so it does not
     // appear as an attribute in SigNoz / the OTLP backend.
     for (const r of filtered) {
-      delete (r.attributes as Record<string, unknown>)[HAOC_DIRECT_EMIT_ATTR];
+      delete (r.attributes as Record<string, unknown>)[OTEL_DIRECT_EMIT_ATTR];
     }
 
     this.inner.export(filtered, resultCallback);

@@ -48,7 +48,7 @@ class TraceRequest
 
         // Custom fields from config are ADDITIVE — defaults always apply.
         // Mirrors Node's mergeSensitiveFields() behaviour.
-        $extraFields     = config('haoc-otel.sensitive_fields', []);
+        $extraFields     = config('otel.sensitive_fields', []);
         $sensitiveFields = array_values(array_unique(array_merge(
             PayloadSanitizer::DEFAULT_SENSITIVE_FIELDS,
             is_array($extraFields) ? $extraFields : [],
@@ -74,14 +74,14 @@ class TraceRequest
         $span->setAttribute(SemanticAttributes::HTTP_ROUTE, "/{$route}");
         $span->setAttribute(SemanticAttributes::URL_PATH, $request->getPathInfo());
         $span->setAttribute(SemanticAttributes::USER_AGENT_ORIGINAL, (string) $request->userAgent());
-        $span->setAttribute(SemanticAttributes::HAOC_PROFILE, $profileName);
-        $span->setAttribute('environment', config('haoc-otel.environment'));
+        $span->setAttribute(SemanticAttributes::OTEL_PROFILE, $profileName);
+        $span->setAttribute('environment', config('otel.environment'));
         // Legacy aliases (kept for backward compat with ClickHouse queries)
         $span->setAttribute(SemanticAttributes::HTTP_METHOD_LEGACY, $method);
         $span->setAttribute('http.url', $request->fullUrl());
         $span->setAttribute('http.target', $request->getRequestUri());
         if ($isPreflight) {
-            $span->setAttribute(SemanticAttributes::HAOC_IS_PREFLIGHT, true);
+            $span->setAttribute(SemanticAttributes::HTTP_IS_PREFLIGHT, true);
         }
 
         // ── User Identity ───────────────────────────────────────────────
@@ -132,7 +132,7 @@ class TraceRequest
                 if (count($parts) === 2) {
                     $key = trim($parts[0]);
                     $value = urldecode(trim($parts[1]));
-                    if (preg_match('/^(haoc\.|page\.|browser\.|device\.|app\.)/', $key)) {
+                    if (preg_match('/^(page\.|browser\.|device\.|app\.)/', $key)) {
                         $span->setAttribute($key, $value);
                     }
                 }
@@ -191,11 +191,11 @@ class TraceRequest
             $reqLogCtx = [
                 SemanticAttributes::HTTP_REQUEST_METHOD => $method,
                 SemanticAttributes::HTTP_ROUTE          => "/{$route}",
-                SemanticAttributes::HAOC_PROFILE        => $profileName,
-                SemanticAttributes::HAOC_LOG_EVENT      => $isPreflight
+                SemanticAttributes::OTEL_PROFILE        => $profileName,
+                SemanticAttributes::LOG_EVENT      => $isPreflight
                     ? SemanticAttributes::LOG_EVENT_PREFLIGHT
                     : SemanticAttributes::LOG_EVENT_REQUEST,
-                SemanticAttributes::HAOC_LOG_TITLE      => "{$method} /{$route} [{$traceId}]",
+                SemanticAttributes::LOG_TITLE      => "{$method} /{$route} [{$traceId}]",
             ];
 
             if ($logPayloadMode === 'json-attr' && $inputPayload !== null) {
@@ -204,7 +204,7 @@ class TraceRequest
                     'maxBytes'        => $maxReqBytes,
                 ]);
                 if ($json !== null) {
-                    $reqLogCtx[SemanticAttributes::HAOC_REQUEST_JSON] = $json;
+                    $reqLogCtx[SemanticAttributes::REQUEST_JSON] = $json;
                 }
             } elseif ($logPayloadMode === 'flatten' && $inputPayload !== null) {
                 foreach ($this->flattenAttributes('body', $this->sanitize($inputPayload, $sensitiveFields)) as $k => $v) {
@@ -266,9 +266,9 @@ class TraceRequest
                     SemanticAttributes::HTTP_ROUTE                 => "/{$route}",
                     SemanticAttributes::HTTP_RESPONSE_STATUS_CODE  => $statusCode,
                     'http.duration_ms'                             => $duration,
-                    SemanticAttributes::HAOC_PROFILE               => $profileName,
-                    SemanticAttributes::HAOC_LOG_EVENT             => SemanticAttributes::LOG_EVENT_RESPONSE,
-                    SemanticAttributes::HAOC_LOG_TITLE             => "{$method} /{$route} {$statusCode} {$duration}ms [{$traceId}]",
+                    SemanticAttributes::OTEL_PROFILE               => $profileName,
+                    SemanticAttributes::LOG_EVENT             => SemanticAttributes::LOG_EVENT_RESPONSE,
+                    SemanticAttributes::LOG_TITLE             => "{$method} /{$route} {$statusCode} {$duration}ms [{$traceId}]",
                 ];
 
                 if ($logPayloadMode === 'json-attr' && $responseBodyRaw !== null) {
@@ -277,7 +277,7 @@ class TraceRequest
                         'maxBytes'        => $maxResBytes,
                     ]);
                     if ($json !== null) {
-                        $logContext[SemanticAttributes::HAOC_RESPONSE_JSON] = $json;
+                        $logContext[SemanticAttributes::RESPONSE_JSON] = $json;
                     }
                 } elseif ($logPayloadMode === 'flatten' && $responseBodyRaw !== null) {
                     $sanitized = $this->sanitize($responseBodyRaw, $sensitiveFields);
@@ -313,9 +313,9 @@ class TraceRequest
                 SemanticAttributes::HTTP_ROUTE                => "/{$route}",
                 SemanticAttributes::HTTP_RESPONSE_STATUS_CODE => $statusCode,
                 'http.duration_ms'                            => $duration,
-                SemanticAttributes::HAOC_PROFILE              => $profileName,
-                SemanticAttributes::HAOC_LOG_EVENT            => SemanticAttributes::LOG_EVENT_ERROR,
-                SemanticAttributes::HAOC_LOG_TITLE            => "{$method} /{$route} {$statusCode} {$duration}ms [{$traceId}]",
+                SemanticAttributes::OTEL_PROFILE              => $profileName,
+                SemanticAttributes::LOG_EVENT            => SemanticAttributes::LOG_EVENT_ERROR,
+                SemanticAttributes::LOG_TITLE            => "{$method} /{$route} {$statusCode} {$duration}ms [{$traceId}]",
                 'error' => [
                     'message' => $e->getMessage(),
                     'type'    => get_class($e),

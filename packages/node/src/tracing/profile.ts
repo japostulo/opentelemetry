@@ -1,5 +1,5 @@
 /**
- * Profile resolver for HAOC OpenTelemetry (Node).
+ * Profile resolver for Node OpenTelemetry.
  *
  * Resolves the effective configuration in this precedence order:
  *   explicit programmatic argument > env var (OTEL_*) > profile default
@@ -9,17 +9,19 @@
  *     Express middleware spans suppressed; static-asset / health / metrics
  *     paths ignored; request/response body capture is OFF.
  *   - `standard`: basic tracing without span body flatten; payload goes into
- *     logs as a single `haoc.request.json` / `haoc.response.json` attribute.
+ *     logs as a single `request.json` / `response.json` attribute.
  *   - `verbose`: everything on — span body flatten, full log payload, OPTIONS logging.
  */
 import type { PayloadMode } from '../core/observability-profile';
 
-export type HaocProfileName = 'minimal' | 'standard' | 'verbose';
+export type OtelProfileName = 'minimal' | 'standard' | 'verbose';
+/** @deprecated Use {@link OtelProfileName} */
+export type HaocProfileName = OtelProfileName;
 
 export type ExpressIgnoreLayer = 'middleware' | 'request_handler' | 'router';
 
 export interface ResolvedProfile {
-  profile: HaocProfileName;
+  profile: OtelProfileName;
   sampleRatio: number;
   ignoreIncomingPaths: RegExp[];
   ignoreOutgoingUrls: RegExp[];
@@ -34,7 +36,7 @@ export interface ResolvedProfile {
   /**
    * How payload is stored in log attributes.
    * - `none`:      no payload in logs (minimal)
-   * - `json-attr`: single `haoc.request.json` / `haoc.response.json` attribute (standard, verbose)
+   * - `json-attr`: single `request.json` / `response.json` attribute (standard, verbose)
    * - `flatten`:   legacy dot-notation attributes (backward compat)
    *
    * Overridable via `OTEL_LOG_PAYLOAD_MODE` env var.
@@ -75,7 +77,7 @@ const DEFAULT_IGNORE_INCOMING: RegExp[] = [
 
 const DEFAULT_IGNORE_OUTGOING: RegExp[] = [];
 
-const PROFILES: Record<HaocProfileName, ResolvedProfile> = {
+const PROFILES: Record<OtelProfileName, ResolvedProfile> = {
   minimal: {
     profile: 'minimal',
     sampleRatio: 1.0,
@@ -214,7 +216,7 @@ export function parsePatternList(
 }
 
 export interface ProfileOverrides {
-  profile?: HaocProfileName;
+  profile?: OtelProfileName;
   sampleRatio?: number;
   ignoreIncomingPaths?: (string | RegExp)[];
   ignoreOutgoingUrls?: (string | RegExp)[];
@@ -252,9 +254,9 @@ export function resolveProfile(overrides: ProfileOverrides = {}): ResolvedProfil
   const useEnv = !overrides.ignoreEnv;
   const env = useEnv ? process.env : ({} as NodeJS.ProcessEnv);
 
-  const profileName: HaocProfileName =
+  const profileName: OtelProfileName =
     overrides.profile ??
-    (env.OTEL_PROFILE as HaocProfileName | undefined) ??
+    (env.OTEL_PROFILE as OtelProfileName | undefined) ??
     'minimal';
 
   const base = PROFILES[profileName] ?? PROFILES.minimal;
@@ -399,7 +401,7 @@ export function matchesAny(patterns: RegExp[], value: string): boolean {
 // ── Runtime helpers (consumed by interceptor / middleware) ─────────────
 
 interface RuntimeProfileSummary {
-  profile: HaocProfileName;
+  profile: OtelProfileName;
   captureRequestBody: boolean;
   captureResponseBody: boolean;
   logRequestBody: boolean;
@@ -424,7 +426,7 @@ export function getRuntimeProfile(): RuntimeProfileSummary {
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as {
-        profile: HaocProfileName;
+        profile: OtelProfileName;
         captureRequestBody: boolean;
         captureResponseBody: boolean;
         logRequestBody: boolean;

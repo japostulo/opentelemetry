@@ -6,7 +6,7 @@ namespace Haoc\OpenTelemetry;
  * Resolves the active profile + overrides + env vars into a single object
  * consumed by the service provider and the TraceRequest middleware.
  *
- * Precedence: explicit config('haoc-otel.<key>') > env (OTEL_*) >
+ * Precedence: explicit config('otel.<key>') > env (OTEL_*) >
  * profile defaults.
  */
 class Profile
@@ -32,7 +32,7 @@ class Profile
     }
 
     /**
-     * Resolves the profile from the `haoc-otel` Laravel config (which itself
+     * Resolves the profile from the `otel` Laravel config (which itself
      * already reads env vars via env()).
      *
      * @param array<string, mixed> $config

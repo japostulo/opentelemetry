@@ -2,7 +2,7 @@
 export * from './core';
 
 // ── Tracing ─────────────────────────────────────────────────────────────
-export type { HaocTelemetryConfig } from './tracing/types';
+export type { OtelConfig, HaocTelemetryConfig } from './tracing/types';
 export { setupTracing } from './tracing/setup';
 
 // ── Profile utilities (admin / testing) ─────────────────────────────────
@@ -12,6 +12,7 @@ export {
   _resetRuntimeProfileCache,
 } from './tracing/profile';
 export type {
+  OtelProfileName,
   HaocProfileName,
   ResolvedProfile,
   ProfileOverrides,
@@ -19,14 +20,20 @@ export type {
 
 // ── Identity ────────────────────────────────────────────────────────────
 export {
-  HAOC_USER_ATTR,
-  HAOC_USER_ROLE_ATTR,
-  HAOC_USER_TYPE_ATTR,
+  USER_ATTR,
+  USER_ROLE_ATTR,
+  USER_TYPE_ATTR,
   setUser,
   clearUser,
   getUser,
   identifyUser,
   getUserSpanAttributes,
+  type UserIdentity,
+  type UserType,
+  // deprecated aliases
+  HAOC_USER_ATTR,
+  HAOC_USER_ROLE_ATTR,
+  HAOC_USER_TYPE_ATTR,
   type HaocUserIdentity,
   type HaocUserType,
 } from './identity';

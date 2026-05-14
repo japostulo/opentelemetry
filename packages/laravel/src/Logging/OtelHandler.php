@@ -26,7 +26,7 @@ class OtelHandler extends AbstractProcessingHandler
     /**
      * @param bool|null $emitToOtlp  When `null`, emission is decided at
      *                                runtime by reading
-     *                                `config('haoc-otel.log_destination')`.
+     *                                `config('otel.log_destination')`.
      *                                When `true`/`false`, this overrides
      *                                the runtime config (mainly for tests).
      */
@@ -49,7 +49,7 @@ class OtelHandler extends AbstractProcessingHandler
         if ($this->emitToOtlp !== null) {
             return $this->emitToOtlp;
         }
-        $destination = config('haoc-otel.log_destination', 'both');
+        $destination = config('otel.log_destination', 'both');
         return !in_array($destination, ['console', 'none'], true);
     }
 
@@ -73,13 +73,21 @@ class OtelHandler extends AbstractProcessingHandler
             ->setSeverityText($record->level->name);
 
         $attributes = [
-            // Stamped per-record so runtime /admin/config flips reflect
-            // immediately (Resource attrs are immutable post-init).
-            'haoc.otel.profile' => (string) config('haoc-otel.profile', 'minimal'),
+            // Stamped per-record so runtime config changes reflect immediately
+            // (Resource attrs are immutable post-init).
+            'otel.profile' => (string) config('otel.profile', 'minimal'),
         ];
-        // Keys already consumed as the log body — skip to avoid a duplicate
+
+        // Auto-populate log.title from the message when not explicitly set in
+        // context, so every app-level Log::info/debug/warn call is searchable
+        // by title in SigNoz without requiring callers to set it manually.
+        if (!isset($record->context[SemanticAttributes::LOG_TITLE])) {
+            $attributes[SemanticAttributes::LOG_TITLE] = $record->message;
+        }
+
+        // Keys already consumed as the log body — skip to avoid duplicate
         // string attribute alongside the structured body.
-        $bodyKeys = [SemanticAttributes::HAOC_REQUEST_JSON, SemanticAttributes::HAOC_RESPONSE_JSON];
+        $bodyKeys = [SemanticAttributes::REQUEST_JSON, SemanticAttributes::RESPONSE_JSON];
         foreach ($record->context as $key => $value) {
             if (in_array($key, $bodyKeys, true)) {
                 continue;
@@ -116,8 +124,8 @@ class OtelHandler extends AbstractProcessingHandler
     protected function buildBody(LogRecord $record): array|string
     {
         foreach ([
-            SemanticAttributes::HAOC_REQUEST_JSON,
-            SemanticAttributes::HAOC_RESPONSE_JSON,
+            SemanticAttributes::REQUEST_JSON,
+            SemanticAttributes::RESPONSE_JSON,
         ] as $key) {
             $value = $record->context[$key] ?? null;
             if (is_string($value) && $value !== '') {

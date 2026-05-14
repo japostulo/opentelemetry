@@ -4,8 +4,8 @@ import { LoggerModule, Logger } from 'nestjs-pino';
 import type { LoggerConfig } from '../logger/types';
 import { buildLoggerConfig } from '../logger/config';
 import { mergeSensitiveFields } from '../utils/sanitize';
-import { HaocTraceInterceptor, HAOC_SENSITIVE_FIELDS } from './trace.interceptor';
-import type { HaocModuleConfig } from './types';
+import { OtelInterceptor, OTEL_SENSITIVE_FIELDS } from './trace.interceptor';
+import type { OtelModuleConfig } from './types';
 
 /**
  * CORS headers required for OpenTelemetry trace propagation.
@@ -13,11 +13,11 @@ import type { HaocModuleConfig } from './types';
  *
  * @example
  * app.enableCors({
- *   allowedHeaders: [...HAOC_CORS_ALLOWED_HEADERS, 'X-My-Header'],
- *   exposedHeaders: [...HAOC_CORS_EXPOSED_HEADERS],
+ *   allowedHeaders: [...OTEL_CORS_ALLOWED_HEADERS, 'X-My-Header'],
+ *   exposedHeaders: [...OTEL_CORS_EXPOSED_HEADERS],
  * });
  */
-export const HAOC_CORS_ALLOWED_HEADERS: readonly string[] = [
+export const OTEL_CORS_ALLOWED_HEADERS: readonly string[] = [
   'Content-Type',
   'Authorization',
   'traceparent',
@@ -25,43 +25,52 @@ export const HAOC_CORS_ALLOWED_HEADERS: readonly string[] = [
   'baggage',
   'X-Request-ID',
 ];
-export const HAOC_CORS_EXPOSED_HEADERS: readonly string[] = ['X-Trace-Id'];
+/** @deprecated Use {@link OTEL_CORS_ALLOWED_HEADERS} */
+export const HAOC_CORS_ALLOWED_HEADERS = OTEL_CORS_ALLOWED_HEADERS;
+
+export const OTEL_CORS_EXPOSED_HEADERS: readonly string[] = ['X-Trace-Id'];
+/** @deprecated Use {@link OTEL_CORS_EXPOSED_HEADERS} */
+export const HAOC_CORS_EXPOSED_HEADERS = OTEL_CORS_EXPOSED_HEADERS;
 
 /**
  * Token that stores the resolved CORS config so the consumer can call
- * `HaocLoggerModule.getCorsHeaders()` in their bootstrap if needed.
+ * `OtelModule.getCorsHeaders()` in their bootstrap if needed.
  */
-export const HAOC_CORS_CONFIG = 'HAOC_CORS_CONFIG';
+export const OTEL_CORS_CONFIG = 'OTEL_CORS_CONFIG';
+/** @deprecated Use {@link OTEL_CORS_CONFIG} */
+export const HAOC_CORS_CONFIG = OTEL_CORS_CONFIG;
 
-export interface HaocCorsConfig {
+export interface CorsConfig {
   allowedHeaders: string[];
   exposedHeaders: string[];
 }
+/** @deprecated Use {@link CorsConfig} */
+export type HaocCorsConfig = CorsConfig;
 
 /**
- * NestJS module that sets up the full HAOC observability stack:
+ * NestJS module that sets up the full OpenTelemetry observability stack:
  *
  * 1. Structured Pino logger (via `nestjs-pino`)
- * 2. Global `HaocTraceInterceptor` for request/response tracing
+ * 2. Global `OtelInterceptor` for request/response tracing
  * 3. CORS header constants for `X-Trace-Id` propagation
  * 4. Automatic `app.useLogger()` via Logger export
  *
  * **Usage — one line in your AppModule:**
  * ```ts
- * @Module({ imports: [HaocLoggerModule.forRoot()] })
+ * @Module({ imports: [OtelModule.forRoot()] })
  * export class AppModule {}
  * ```
  *
  * **With custom sensitive fields:**
  * ```ts
- * HaocLoggerModule.forRoot({ extraSensitiveFields: ['cpf', 'rg'] })
+ * OtelModule.forRoot({ extraSensitiveFields: ['cpf', 'rg'] })
  * ```
  */
-export class HaocLoggerModule {
+export class OtelModule {
   /**
-   * Registers the full HAOC observability module.
+   * Registers the full OTel observability module.
    */
-  static forRoot(config?: HaocModuleConfig): DynamicModule {
+  static forRoot(config?: OtelModuleConfig): DynamicModule {
     const { pinoOptions, stream } = buildLoggerConfig(config) as {
       pinoOptions: Record<string, unknown>;
       stream?: NodeJS.WritableStream;
@@ -79,7 +88,7 @@ export class HaocLoggerModule {
       : undefined; // undefined = interceptor uses defaults
 
     providers.push({
-      provide: HAOC_SENSITIVE_FIELDS,
+      provide: OTEL_SENSITIVE_FIELDS,
       useValue: sensitiveFields,
     });
 
@@ -87,34 +96,34 @@ export class HaocLoggerModule {
     if (!config?.disableTraceInterceptor) {
       providers.push({
         provide: APP_INTERCEPTOR,
-        useClass: HaocTraceInterceptor,
+        useClass: OtelInterceptor,
       });
     }
 
     // ── CORS config ─────────────────────────────────────────────────
-    const corsConfig: HaocCorsConfig = {
+    const corsConfig: CorsConfig = {
       allowedHeaders: [
-        ...HAOC_CORS_ALLOWED_HEADERS,
+        ...OTEL_CORS_ALLOWED_HEADERS,
         ...(config?.extraAllowedHeaders ?? []),
       ],
       exposedHeaders: [
-        ...HAOC_CORS_EXPOSED_HEADERS,
+        ...OTEL_CORS_EXPOSED_HEADERS,
         ...(config?.extraExposedHeaders ?? []),
       ],
     };
 
     providers.push({
-      provide: HAOC_CORS_CONFIG,
+      provide: OTEL_CORS_CONFIG,
       useValue: corsConfig,
     });
 
     const loggerModule = LoggerModule.forRoot({ pinoHttp } as never);
 
     return {
-      module: HaocLoggerModule,
+      module: OtelModule,
       imports: [loggerModule],
       providers,
-      exports: [loggerModule, HAOC_CORS_CONFIG, HAOC_SENSITIVE_FIELDS],
+      exports: [loggerModule, OTEL_CORS_CONFIG, OTEL_SENSITIVE_FIELDS],
       global: true,
     };
   }
@@ -124,14 +133,14 @@ export class HaocLoggerModule {
    * wants to build their own enableCors() call but still include the
    * tracing headers.
    */
-  static getCorsHeaders(config?: HaocModuleConfig): HaocCorsConfig {
+  static getCorsHeaders(config?: OtelModuleConfig): CorsConfig {
     return {
       allowedHeaders: [
-        ...HAOC_CORS_ALLOWED_HEADERS,
+        ...OTEL_CORS_ALLOWED_HEADERS,
         ...(config?.extraAllowedHeaders ?? []),
       ],
       exposedHeaders: [
-        ...HAOC_CORS_EXPOSED_HEADERS,
+        ...OTEL_CORS_EXPOSED_HEADERS,
         ...(config?.extraExposedHeaders ?? []),
       ],
     };
@@ -153,4 +162,7 @@ export function buildLoggerModuleParams(config?: LoggerConfig) {
 
   return { pinoHttp };
 }
+
+/** @deprecated Use {@link OtelModule} instead. */
+export const HaocLoggerModule = OtelModule;
 

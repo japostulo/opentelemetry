@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Haoc\OpenTelemetry\Attributes;
 
 /**
- * OpenTelemetry Semantic Conventions (v1.24+) and HAOC institutional
- * attribute name constants.
+ * OpenTelemetry Semantic Conventions (v1.24+) and custom attribute
+ * name constants.
  *
  * Mirror of packages/node/src/core/semantic-attributes.ts for PHP/Laravel.
  * Use these constants instead of raw strings to ensure consistency across
@@ -62,39 +62,52 @@ final class SemanticAttributes
      */
     public const HTTP_STATUS_CODE_LEGACY = 'http.status_code';
 
-    // ── HAOC institutional attributes ─────────────────────────────────
+    // ── Custom attributes ─────────────────────────────────
 
     /** Active observability profile: minimal | standard | verbose */
-    public const HAOC_PROFILE = 'otel.profile';
+    public const OTEL_PROFILE = 'otel.profile';
+    /** @deprecated Use {@see OTEL_PROFILE} */
+    public const HAOC_PROFILE = self::OTEL_PROFILE;
 
     /** Boolean: true when the span represents an HTTP OPTIONS preflight */
-    public const HAOC_IS_PREFLIGHT = 'http.is_preflight';
+    public const HTTP_IS_PREFLIGHT = 'http.is_preflight';
+    /** @deprecated Use {@see HTTP_IS_PREFLIGHT} */
+    public const HAOC_IS_PREFLIGHT = self::HTTP_IS_PREFLIGHT;
 
-    /** Structured event type for HAOC log records */
-    public const HAOC_LOG_EVENT = 'log.event';
+    /** Structured event type for log records */
+    public const LOG_EVENT = 'log.event';
+    /** @deprecated Use {@see LOG_EVENT} */
+    public const HAOC_LOG_EVENT = self::LOG_EVENT;
 
     /**
      * Request payload as a sanitized JSON string attribute.
      * Used in standard and verbose profiles.
      */
-    public const HAOC_REQUEST_JSON = 'request.json';
+    public const REQUEST_JSON = 'request.json';
+    /** @deprecated Use {@see REQUEST_JSON} */
+    public const HAOC_REQUEST_JSON = self::REQUEST_JSON;
 
     /**
      * Response payload as a sanitized JSON string attribute.
      * Used in standard and verbose profiles.
      */
-    public const HAOC_RESPONSE_JSON = 'response.json';
+    public const RESPONSE_JSON = 'response.json';
+    /** @deprecated Use {@see RESPONSE_JSON} */
+    public const HAOC_RESPONSE_JSON = self::RESPONSE_JSON;
 
     /** Error payload as a sanitized JSON string attribute. */
-    public const HAOC_ERROR_JSON = 'error.json';
+    public const ERROR_JSON = 'error.json';
+    /** @deprecated Use {@see ERROR_JSON} */
+    public const HAOC_ERROR_JSON = self::ERROR_JSON;
 
     /**
      * Clean one-line title shown in the SigNoz log list.
      * Format: "METHOD /route [traceId]" for requests,
      *         "METHOD /route STATUS DURms [traceId]" for responses.
-     * Configure SigNoz columns to display this instead of body.
      */
-    public const HAOC_LOG_TITLE = 'log.title';
+    public const LOG_TITLE = 'log.title';
+    /** @deprecated Use {@see LOG_TITLE} */
+    public const HAOC_LOG_TITLE = self::LOG_TITLE;
 
     // ── haoc.log.event values ──────────────────────────────────────────
 

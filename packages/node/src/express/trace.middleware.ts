@@ -20,11 +20,11 @@ import {
   ATTR_HTTP_ROUTE,
   ATTR_URL_PATH,
   ATTR_USER_AGENT_ORIGINAL,
-  ATTR_HAOC_PROFILE,
-  ATTR_HAOC_IS_PREFLIGHT,
-  ATTR_HAOC_LOG_EVENT,
-  ATTR_HAOC_LOG_TITLE,
-  ATTR_HAOC_REQUEST_JSON,
+  ATTR_OTEL_PROFILE,
+  ATTR_HTTP_IS_PREFLIGHT,
+  ATTR_LOG_EVENT,
+  ATTR_LOG_TITLE,
+  ATTR_REQUEST_JSON,
   LOG_EVENT_REQUEST,
   LOG_EVENT_RESPONSE,
   LOG_EVENT_ERROR,
@@ -44,7 +44,7 @@ export interface TraceMiddlewareOptions {
  * Creates an Express middleware that correlates every request/response with
  * the active OpenTelemetry span and produces structured Pino log entries.
  *
- * This is the Express equivalent of {@link HaocTraceInterceptor} for NestJS.
+ * This is the Express equivalent of {@link OtelInterceptor} for NestJS.
  *
  * @example
  * ```ts
@@ -87,7 +87,7 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
     // ── Preflight (OPTIONS) policy ────────────────────────────────────
     const preflight = evaluatePreflight(method, runtime.profile);
     if (preflight.isPreflight && activeSpan) {
-      activeSpan.setAttribute(ATTR_HAOC_IS_PREFLIGHT, true);
+      activeSpan.setAttribute(ATTR_HTTP_IS_PREFLIGHT, true);
     }
 
     const captureBody = runtime.captureRequestBody;
@@ -117,7 +117,7 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
       if (req.headers['user-agent']) {
         activeSpan.setAttribute(ATTR_USER_AGENT_ORIGINAL, String(req.headers['user-agent']));
       }
-      activeSpan.setAttribute(ATTR_HAOC_PROFILE, runtime.profile);
+      activeSpan.setAttribute(ATTR_OTEL_PROFILE, runtime.profile);
       activeSpan.setAttribute(
         'environment',
         process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
@@ -171,9 +171,9 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
       const reqAttrs: AttrRecord = {
         [ATTR_HTTP_REQUEST_METHOD]: method,
         [ATTR_HTTP_ROUTE]: route,
-        [ATTR_HAOC_PROFILE]: runtime.profile,
-        [ATTR_HAOC_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
-        [ATTR_HAOC_LOG_TITLE]: `${method} ${route} [${traceId}]`,
+        [ATTR_OTEL_PROFILE]: runtime.profile,
+        [ATTR_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
+        [ATTR_LOG_TITLE]: `${method} ${route} [${traceId}]`,
       };
       if (rawQuery) flattenToRecord(reqAttrs, 'request.query', rawQuery, 0, sensitiveFields);
       if (rawParams) flattenToRecord(reqAttrs, 'request.params', rawParams, 0, sensitiveFields);
@@ -181,7 +181,7 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
       if (logBody && inputPayload) {
         if (logPayloadMode === 'json-attr') {
           const json = sanitizeToJsonAttr(inputPayload, { sensitiveFields, maxBytes: 16 * 1024 });
-          if (json) reqAttrs[ATTR_HAOC_REQUEST_JSON] = json;
+          if (json) reqAttrs[ATTR_REQUEST_JSON] = json;
         } else if (logPayloadMode === 'flatten') {
           flattenToRecord(reqAttrs, 'body', inputPayload, 0, sensitiveFields);
         }
@@ -196,9 +196,9 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
           ? sanitizeNested(inputPayload, sensitiveFields) as Record<string, unknown>
           : `${method} ${route} [${traceId}]`,
         {
-          [ATTR_HAOC_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
-          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} [${traceId}]`,
-          [ATTR_HAOC_PROFILE]: runtime.profile,
+          [ATTR_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
+          [ATTR_LOG_TITLE]: `${method} ${route} [${traceId}]`,
+          [ATTR_OTEL_PROFILE]: runtime.profile,
           ...userAttrs,
         },
       );
@@ -276,9 +276,9 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
           [ATTR_HTTP_ROUTE]: route,
           [ATTR_HTTP_RESPONSE_STATUS_CODE]: statusCode,
           'http.duration_ms': duration,
-          [ATTR_HAOC_PROFILE]: runtime.profile,
-          [ATTR_HAOC_LOG_EVENT]: statusCode >= 400 ? LOG_EVENT_ERROR : LOG_EVENT_RESPONSE,
-          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+          [ATTR_OTEL_PROFILE]: runtime.profile,
+          [ATTR_LOG_EVENT]: statusCode >= 400 ? LOG_EVENT_ERROR : LOG_EVENT_RESPONSE,
+          [ATTR_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
         };
 
         if (logResponse && parsedResponseBody !== undefined && logPayloadMode === 'flatten') {
@@ -303,9 +303,9 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
             ? sanitizeNested(parsedResponseBody, sensitiveFields) as Record<string, unknown>
             : `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
           {
-            [ATTR_HAOC_LOG_EVENT]: statusCode >= 400 ? LOG_EVENT_ERROR : LOG_EVENT_RESPONSE,
-            [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
-            [ATTR_HAOC_PROFILE]: runtime.profile,
+            [ATTR_LOG_EVENT]: statusCode >= 400 ? LOG_EVENT_ERROR : LOG_EVENT_RESPONSE,
+            [ATTR_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+            [ATTR_OTEL_PROFILE]: runtime.profile,
             ...userAttrsOnClose,
           },
         );
