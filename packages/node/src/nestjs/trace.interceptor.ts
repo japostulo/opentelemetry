@@ -7,15 +7,34 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
-import { Observable, tap, catchError, throwError } from 'rxjs';
+import { Observable, tap, catchError, throwError, finalize } from 'rxjs';
 import { trace, context, SpanStatusCode, propagation } from '@opentelemetry/api';
 
 import { flattenToSpan, flattenToRecord, type AttrRecord } from '../utils/flatten';
 import { hasContent } from '../utils/stringify';
 import { DEFAULT_SENSITIVE_FIELDS, mergeSensitiveFields, sanitizeNested } from '../utils/sanitize';
-import { getUserSpanAttributes } from '../identity';
+import { getUserSpanAttributes, getUserByTraceId, clearUserByTraceId } from '../identity';
 import { getRuntimeProfile, matchesAny, shouldLogBodyForRoute } from '../tracing/profile';
 import { otelEmit } from '../logger/otel-emit';
+import {
+  ATTR_HTTP_REQUEST_METHOD,
+  ATTR_HTTP_RESPONSE_STATUS_CODE,
+  ATTR_HTTP_ROUTE,
+  ATTR_URL_PATH,
+  ATTR_USER_AGENT_ORIGINAL,
+  ATTR_HAOC_PROFILE,
+  ATTR_HAOC_IS_PREFLIGHT,
+  ATTR_HAOC_LOG_EVENT,
+  ATTR_HAOC_LOG_TITLE,
+  ATTR_HAOC_REQUEST_JSON,
+  ATTR_HAOC_ERROR_JSON,
+  LOG_EVENT_REQUEST,
+  LOG_EVENT_RESPONSE,
+  LOG_EVENT_ERROR,
+  LOG_EVENT_PREFLIGHT,
+} from '../core/semantic-attributes';
+import { sanitizeToJsonAttr } from '../core/sanitize-payload';
+import { evaluatePreflight } from '../core/preflight-policy';
 
 export interface TraceInterceptorOptions {
   /**
@@ -80,17 +99,19 @@ export class HaocTraceInterceptor implements NestInterceptor {
     // ── Profile-driven runtime decisions ─────────────────────────────
     const runtime = getRuntimeProfile();
     if (matchesAny(runtime.ignoreRoutes, route)) {
-      // Route is on the ignore list — pass through without enriching the
-      // span or emitting request/response logs. The HTTP auto-instrumentation
-      // ignoreIncomingRequestHook normally drops the span itself; this is a
-      // belt-and-braces guard for routes registered after the SDK started.
       return next.handle();
+    }
+
+    // ── Preflight (OPTIONS) policy ────────────────────────────────────
+    const preflight = evaluatePreflight(method, runtime.profile);
+    if (preflight.isPreflight && activeSpan) {
+      activeSpan.setAttribute(ATTR_HAOC_IS_PREFLIGHT, true);
     }
 
     const captureBody = runtime.captureRequestBody;
     const captureResponse = runtime.captureResponseBody;
+    const logPayloadMode = runtime.logPayloadMode;
 
-    // Log body controls (independent of span attributes)
     const routeAllowsLogBody = shouldLogBodyForRoute(runtime, route);
     const logBody = runtime.logRequestBody && routeAllowsLogBody;
     const logResponse = runtime.logResponseBody && routeAllowsLogBody;
@@ -99,24 +120,34 @@ export class HaocTraceInterceptor implements NestInterceptor {
     const rawQuery = hasContent(request.query) ? request.query : undefined;
     const rawParams = hasContent(request.params) ? request.params : undefined;
 
+    // "Input payload" = the primary input data for this request:
+    // GET/HEAD/DELETE → query params; POST/PUT/PATCH → request body
+    const inputPayload = ['GET', 'HEAD', 'DELETE'].includes(method) ? rawQuery : rawBody;
+
+    // ── User Identity (read once; used for span, request log, and response fallback)
+    const userAttrs = getUserSpanAttributes();
+
     if (activeSpan) {
-      activeSpan.setAttribute('http.route', route);
-      activeSpan.setAttribute('haoc.otel.profile', runtime.profile);
+      activeSpan.setAttribute(ATTR_HTTP_ROUTE, route);
+      activeSpan.setAttribute(ATTR_URL_PATH, request.path);
+      if (request.headers?.['user-agent']) {
+        activeSpan.setAttribute(ATTR_USER_AGENT_ORIGINAL, String(request.headers['user-agent']));
+      }
+      activeSpan.setAttribute(ATTR_HAOC_PROFILE, runtime.profile);
       activeSpan.setAttribute(
         'environment',
         process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
       );
-      if (rawQuery) flattenToSpan(activeSpan, 'haoc.request.query', rawQuery, 0, this.sensitiveFields);
-      if (rawParams) flattenToSpan(activeSpan, 'haoc.request.params', rawParams, 0, this.sensitiveFields);
-      if (captureBody && rawBody) flattenToSpan(activeSpan, 'haoc.request.body', rawBody, 0, this.sensitiveFields);
+      if (rawQuery) flattenToSpan(activeSpan, 'request.query', rawQuery, 0, this.sensitiveFields);
+      if (rawParams) flattenToSpan(activeSpan, 'request.params', rawParams, 0, this.sensitiveFields);
+      if (captureBody && inputPayload) flattenToSpan(activeSpan, 'body', inputPayload, 0, this.sensitiveFields);
 
-      // ── User Identity ───────────────────────────────────────────────
-      const userAttrs = getUserSpanAttributes();
+      // ── User Identity ─────────────────────────────────────────────
       for (const [key, value] of Object.entries(userAttrs)) {
         activeSpan.setAttribute(key, value);
       }
 
-      // ── Infrastructure / Hop Tracking ───────────────────────────────
+      // ── Infrastructure / Hop Tracking ─────────────────────────────
       const headers = request.headers;
       const forwardedFor = headers['x-forwarded-for'];
       if (forwardedFor) {
@@ -124,26 +155,17 @@ export class HaocTraceInterceptor implements NestInterceptor {
         activeSpan.setAttribute('http.forwarded_for', ffValue);
         activeSpan.setAttribute('network.hop_count', ffValue.split(',').length);
       }
-      if (headers['x-real-ip']) {
-        activeSpan.setAttribute('http.real_ip', String(headers['x-real-ip']));
-      }
-      if (headers['x-forwarded-host']) {
-        activeSpan.setAttribute('http.forwarded_host', String(headers['x-forwarded-host']));
-      }
-      if (headers['x-forwarded-proto']) {
-        activeSpan.setAttribute('http.forwarded_proto', String(headers['x-forwarded-proto']));
-      }
-      if (headers['via']) {
-        activeSpan.setAttribute('http.via', String(headers['via']));
-      }
+      if (headers['x-real-ip']) activeSpan.setAttribute('http.real_ip', String(headers['x-real-ip']));
+      if (headers['x-forwarded-host']) activeSpan.setAttribute('http.forwarded_host', String(headers['x-forwarded-host']));
+      if (headers['x-forwarded-proto']) activeSpan.setAttribute('http.forwarded_proto', String(headers['x-forwarded-proto']));
+      if (headers['via']) activeSpan.setAttribute('http.via', String(headers['via']));
 
-      // ── Baggage from Frontend ───────────────────────────────────────
-      // W3C Baggage propagated from frontend (page, browser, device info)
+      // ── Baggage from Frontend ──────────────────────────────────────
       const baggage = propagation.getBaggage(context.active());
       if (baggage) {
         const baggageEntries = baggage.getAllEntries();
         for (const [key, entry] of baggageEntries) {
-          if (key.startsWith('haoc.') || key.startsWith('page.') ||
+          if (key.startsWith('user.') || key.startsWith('page.') ||
               key.startsWith('browser.') || key.startsWith('device.') ||
               key.startsWith('app.')) {
             activeSpan.setAttribute(key, entry.value);
@@ -152,37 +174,48 @@ export class HaocTraceInterceptor implements NestInterceptor {
       }
     }
 
-    const reqAttrs: AttrRecord = {
-      'http.method': method,
-      'http.route': route,
-      'haoc.otel.profile': runtime.profile,
-    };
-    if (rawQuery) flattenToRecord(reqAttrs, 'haoc.request.query', rawQuery, 0, this.sensitiveFields);
-    if (rawParams) flattenToRecord(reqAttrs, 'haoc.request.params', rawParams, 0, this.sensitiveFields);
-    if (logBody && rawBody) flattenToRecord(reqAttrs, 'haoc.request.body', rawBody, 0, this.sensitiveFields);
+    // ── Request log — skip entirely for OPTIONS if profile says so ────
+    if (!preflight.isPreflight || preflight.shouldLog) {
+      const reqAttrs: AttrRecord = {
+        [ATTR_HTTP_REQUEST_METHOD]: method,
+        [ATTR_HTTP_ROUTE]: route,
+        [ATTR_HAOC_PROFILE]: runtime.profile,
+        [ATTR_HAOC_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
+        [ATTR_HAOC_LOG_TITLE]: `${method} ${route} [${traceId}]`,
+      };
+      if (rawQuery) flattenToRecord(reqAttrs, 'request.query', rawQuery, 0, this.sensitiveFields);
+      if (rawParams) flattenToRecord(reqAttrs, 'request.params', rawParams, 0, this.sensitiveFields);
 
-    this.logger.info(reqAttrs, `${method} ${route} [${traceId}]`);
-    otelEmit('info', {
-      msg: `${method} ${route} [${traceId}]`,
-      req: {
-        method,
-        url: request.url,
-        headers: {
-          host: request.headers['host'],
-          'user-agent': request.headers['user-agent'],
-          'content-type': request.headers['content-type'],
+      if (logBody && inputPayload) {
+        if (logPayloadMode === 'json-attr') {
+          const json = sanitizeToJsonAttr(inputPayload, { sensitiveFields: this.sensitiveFields, maxBytes: 16 * 1024 });
+          if (json) reqAttrs[ATTR_HAOC_REQUEST_JSON] = json;
+        } else if (logPayloadMode === 'flatten') {
+          flattenToRecord(reqAttrs, 'body', inputPayload, 0, this.sensitiveFields);
+        }
+      }
+      // User attrs are known at request time when identifyUser() was called in a guard
+      Object.assign(reqAttrs, userAttrs);
+
+      this.logger.info(reqAttrs, `${method} ${route} [${traceId}]`);
+      otelEmit('info',
+        (logBody && inputPayload)
+          ? sanitizeNested(inputPayload, this.sensitiveFields) as Record<string, unknown>
+          : `${method} ${route} [${traceId}]`,
+        {
+          [ATTR_HAOC_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
+          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} [${traceId}]`,
+          [ATTR_HAOC_PROFILE]: runtime.profile,
+          ...userAttrs,
         },
-        ...(rawQuery ? { query: sanitizeNested(rawQuery, this.sensitiveFields) as Record<string, unknown> } : {}),
-        ...(logBody && rawBody ? { body: sanitizeNested(rawBody, this.sensitiveFields) as Record<string, unknown> } : {}),
-      },
-      service: process.env.OTEL_SERVICE_NAME,
-      environment: process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
-      requestPath: request.url,
-      'haoc.otel.profile': runtime.profile,
-    });
+      );
+    }
 
     return next.handle().pipe(
       tap((responseBody) => {
+        // Skip response log for OPTIONS if profile says so
+        if (preflight.isPreflight && !preflight.shouldLog) return;
+
         const duration = Date.now() - startTime;
         const statusCode = response.statusCode;
 
@@ -191,113 +224,122 @@ export class HaocTraceInterceptor implements NestInterceptor {
           responseBody?.constructor?.name === 'ServerResponseImpl';
 
         const resAttrs: AttrRecord = {
-          'http.method': method,
-          'http.route': route,
-          'http.status_code': statusCode,
+          [ATTR_HTTP_REQUEST_METHOD]: method,
+          [ATTR_HTTP_ROUTE]: route,
+          [ATTR_HTTP_RESPONSE_STATUS_CODE]: statusCode,
           'http.duration_ms': duration,
-          'haoc.otel.profile': runtime.profile,
+          [ATTR_HAOC_PROFILE]: runtime.profile,
+          [ATTR_HAOC_LOG_EVENT]: LOG_EVENT_RESPONSE,
+          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
         };
 
         if (activeSpan) {
-          activeSpan.setAttribute('http.status_code', statusCode);
+          activeSpan.setAttribute(ATTR_HTTP_RESPONSE_STATUS_CODE, statusCode);
           activeSpan.setAttribute('http.duration_ms', duration);
-          if (
-            captureResponse &&
-            responseBody !== undefined &&
-            !isStreamResponse
-          ) {
-            flattenToSpan(activeSpan, 'haoc.response.body', responseBody, 0, this.sensitiveFields);
+          if (captureResponse && responseBody !== undefined && !isStreamResponse) {
+            flattenToSpan(activeSpan, 'response.body', responseBody, 0, this.sensitiveFields);
           }
         }
 
-        if (
-          logResponse &&
-          responseBody !== undefined &&
-          !isStreamResponse
-        ) {
-          flattenToRecord(resAttrs, 'haoc.response.body', responseBody, 0, this.sensitiveFields);
+        if (logResponse && responseBody !== undefined && !isStreamResponse && logPayloadMode === 'flatten') {
+          flattenToRecord(resAttrs, 'response.body', responseBody, 0, this.sensitiveFields);
         }
 
-        this.logger.info(
-          resAttrs,
-          `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
-        );
-        otelEmit('info', {
-          msg: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
-          req: { method, url: request.url },
-          res: {
-            statusCode,
-            responseTime: duration,
-            ...(logResponse && responseBody !== undefined && !isStreamResponse
-              ? { body: sanitizeNested(responseBody, this.sensitiveFields) as Record<string, unknown> }
-              : {}),
+        // Prefer AsyncLocalStorage; fall back to per-trace map when
+        // identifyUser() was called inside the handler (Forma 2) and the
+        // RxJS Observable subscription runs in a different async context.
+        let userAttrsOnRes = getUserSpanAttributes();
+        if (!userAttrsOnRes['user.id'] && traceId !== 'none') {
+          const u = getUserByTraceId(traceId);
+          if (u) {
+            userAttrsOnRes = {
+              'user.id': u.id,
+              'user.type': u.type ?? 'authenticated',
+              ...(u.role ? { 'user.role': u.role } : {}),
+            };
+          }
+        }
+
+        if (activeSpan) {
+          for (const [key, value] of Object.entries(userAttrsOnRes)) activeSpan.setAttribute(key, value);
+        }
+        // Include user attrs in Pino log too
+        Object.assign(resAttrs, userAttrsOnRes);
+
+        this.logger.info(resAttrs, `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`);
+        otelEmit('info',
+          (logResponse && responseBody !== undefined && !isStreamResponse)
+            ? sanitizeNested(responseBody, this.sensitiveFields) as Record<string, unknown>
+            : `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+          {
+            [ATTR_HAOC_LOG_EVENT]: LOG_EVENT_RESPONSE,
+            [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+            [ATTR_HAOC_PROFILE]: runtime.profile,
+            ...userAttrsOnRes,
           },
-          service: process.env.OTEL_SERVICE_NAME,
-          environment: process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
-          requestPath: request.url,
-          'haoc.otel.profile': runtime.profile,
-        });
+        );
       }),
       catchError((err: Error & { status?: number; stack?: string; getResponse?: () => unknown }) => {
         const duration = Date.now() - startTime;
         const statusCode = err.status || 500;
 
-        // Try to capture the error response body (e.g. HttpException response)
         const errorResponse = typeof err.getResponse === 'function' ? err.getResponse() : undefined;
 
         if (activeSpan) {
-          activeSpan.setAttribute('http.status_code', statusCode);
+          activeSpan.setAttribute(ATTR_HTTP_RESPONSE_STATUS_CODE, statusCode);
           activeSpan.setAttribute('http.duration_ms', duration);
           activeSpan.setAttribute('error.message', String(err.message));
-          activeSpan.setAttribute(
-            'error.type',
-            err.constructor?.name || 'Error',
-          );
+          activeSpan.setAttribute('error.type', err.constructor?.name || 'Error');
           if (errorResponse && typeof errorResponse === 'object') {
-            flattenToSpan(activeSpan, 'haoc.error.response', errorResponse, 0, this.sensitiveFields);
+            flattenToSpan(activeSpan, 'error.response', errorResponse, 0, this.sensitiveFields);
           }
-          activeSpan.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: err.message,
-          });
+          activeSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
           activeSpan.recordException(err);
         }
 
         const errAttrs: AttrRecord = {
-          'http.method': method,
-          'http.route': route,
-          'http.status_code': statusCode,
+          [ATTR_HTTP_REQUEST_METHOD]: method,
+          [ATTR_HTTP_ROUTE]: route,
+          [ATTR_HTTP_RESPONSE_STATUS_CODE]: statusCode,
           'http.duration_ms': duration,
-          'haoc.otel.profile': runtime.profile,
+          [ATTR_HAOC_PROFILE]: runtime.profile,
+          [ATTR_HAOC_LOG_EVENT]: LOG_EVENT_ERROR,
+          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
           'error.message': String(err.message),
           'error.type': err.constructor?.name || 'Error',
         };
-        if (logResponse && errorResponse && typeof errorResponse === 'object') {
-          flattenToRecord(errAttrs, 'haoc.error.response', errorResponse, 0, this.sensitiveFields);
+
+        const errorJson = (errorResponse && typeof errorResponse === 'object')
+          ? sanitizeToJsonAttr(errorResponse, { sensitiveFields: this.sensitiveFields })
+          : undefined;
+        if (errorJson) errAttrs[ATTR_HAOC_ERROR_JSON] = errorJson;
+
+        if (logResponse && errorResponse && typeof errorResponse === 'object' && logPayloadMode === 'flatten') {
+          flattenToRecord(errAttrs, 'error.response', errorResponse, 0, this.sensitiveFields);
         }
 
-        this.logger.error(
-          errAttrs,
+        const userAttrsOnErr = getUserSpanAttributes();
+        if (activeSpan) {
+          for (const [key, value] of Object.entries(userAttrsOnErr)) activeSpan.setAttribute(key, value);
+        }
+        Object.assign(errAttrs, userAttrsOnErr);
+
+        this.logger.error(errAttrs, `${method} ${route} ${statusCode} ${duration}ms [${traceId}] ${err.message}`);
+        otelEmit('error',
           `${method} ${route} ${statusCode} ${duration}ms [${traceId}] ${err.message}`,
-        );
-        otelEmit('error', {
-          msg: `${method} ${route} ${statusCode} ${duration}ms [${traceId}] ${err.message}`,
-          req: { method, url: request.url },
-          error: {
-            message: String(err.message),
-            type: err.constructor?.name || 'Error',
-            ...(errorResponse && typeof errorResponse === 'object'
-              ? { response: sanitizeNested(errorResponse, this.sensitiveFields) as Record<string, unknown> }
-              : {}),
+          {
+            [ATTR_HAOC_LOG_EVENT]: LOG_EVENT_ERROR,
+            [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+            [ATTR_HAOC_PROFILE]: runtime.profile,
+            ...userAttrsOnErr,
+            ...(errorJson ? { [ATTR_HAOC_ERROR_JSON]: errorJson } : {}),
           },
-          res: { statusCode },
-          service: process.env.OTEL_SERVICE_NAME,
-          environment: process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
-          requestPath: request.url,
-          'haoc.otel.profile': runtime.profile,
-        });
+        );
 
         return throwError(() => err);
+      }),
+      finalize(() => {
+        if (traceId !== 'none') clearUserByTraceId(traceId);
       }),
     );
   }

@@ -14,6 +14,24 @@ import { getUserSpanAttributes } from '../identity';
 import { buildLoggerConfig } from '../logger/config';
 import type { LoggerConfig } from '../logger/types';
 import { getRuntimeProfile, matchesAny, shouldLogBodyForRoute } from '../tracing/profile';
+import {
+  ATTR_HTTP_REQUEST_METHOD,
+  ATTR_HTTP_RESPONSE_STATUS_CODE,
+  ATTR_HTTP_ROUTE,
+  ATTR_URL_PATH,
+  ATTR_USER_AGENT_ORIGINAL,
+  ATTR_HAOC_PROFILE,
+  ATTR_HAOC_IS_PREFLIGHT,
+  ATTR_HAOC_LOG_EVENT,
+  ATTR_HAOC_LOG_TITLE,
+  ATTR_HAOC_REQUEST_JSON,
+  LOG_EVENT_REQUEST,
+  LOG_EVENT_RESPONSE,
+  LOG_EVENT_ERROR,
+  LOG_EVENT_PREFLIGHT,
+} from '../core/semantic-attributes';
+import { sanitizeToJsonAttr } from '../core/sanitize-payload';
+import { evaluatePreflight } from '../core/preflight-policy';
 
 export interface TraceMiddlewareOptions {
   /**
@@ -65,10 +83,18 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
       next();
       return;
     }
+
+    // ── Preflight (OPTIONS) policy ────────────────────────────────────
+    const preflight = evaluatePreflight(method, runtime.profile);
+    if (preflight.isPreflight && activeSpan) {
+      activeSpan.setAttribute(ATTR_HAOC_IS_PREFLIGHT, true);
+    }
+
     const captureBody = runtime.captureRequestBody;
     const captureResponse = runtime.captureResponseBody;
+    const logPayloadMode = runtime.logPayloadMode;
 
-    // Log body controls (independent of span attributes)
+    // Log body controls
     const routeAllowsLogBody = shouldLogBodyForRoute(runtime, route);
     const logBody = runtime.logRequestBody && routeAllowsLogBody;
     const logResponse = runtime.logResponseBody && routeAllowsLogBody;
@@ -77,23 +103,35 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
     const rawQuery = hasContent(req.query) ? req.query : undefined;
     const rawParams = hasContent(req.params) ? req.params : undefined;
 
-    // ── Span attributes ───────────────────────────────────────────────
+    // "Input payload" = the primary input data for this request:
+    // GET/HEAD/DELETE → query params; POST/PUT/PATCH → request body
+    const inputPayload = ['GET', 'HEAD', 'DELETE'].includes(method) ? rawQuery : rawBody;
+
+    // ── User Identity (read once; used for span, request log, and response fallback)
+    const userAttrs = getUserSpanAttributes();
+
+    // ── Span attributes (new semconv + legacy aliases) ────────────────
     if (activeSpan) {
-      activeSpan.setAttribute('http.route', route);      activeSpan.setAttribute('haoc.otel.profile', runtime.profile);      activeSpan.setAttribute(
+      activeSpan.setAttribute(ATTR_HTTP_ROUTE, route);
+      activeSpan.setAttribute(ATTR_URL_PATH, req.path);
+      if (req.headers['user-agent']) {
+        activeSpan.setAttribute(ATTR_USER_AGENT_ORIGINAL, String(req.headers['user-agent']));
+      }
+      activeSpan.setAttribute(ATTR_HAOC_PROFILE, runtime.profile);
+      activeSpan.setAttribute(
         'environment',
         process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
       );
-      if (rawQuery) flattenToSpan(activeSpan, 'haoc.request.query', rawQuery, 0, sensitiveFields);
-      if (rawParams) flattenToSpan(activeSpan, 'haoc.request.params', rawParams, 0, sensitiveFields);
-      if (captureBody && rawBody) flattenToSpan(activeSpan, 'haoc.request.body', rawBody, 0, sensitiveFields);
+      if (rawQuery) flattenToSpan(activeSpan, 'request.query', rawQuery, 0, sensitiveFields);
+      if (rawParams) flattenToSpan(activeSpan, 'request.params', rawParams, 0, sensitiveFields);
+      if (captureBody && inputPayload) flattenToSpan(activeSpan, 'body', inputPayload, 0, sensitiveFields);
 
-      // ── User Identity ───────────────────────────────────────────────
-      const userAttrs = getUserSpanAttributes();
+      // ── User Identity ─────────────────────────────────────────────
       for (const [key, value] of Object.entries(userAttrs)) {
         activeSpan.setAttribute(key, value);
       }
 
-      // ── Infrastructure / Hop Tracking ───────────────────────────────
+      // ── Infrastructure / Hop Tracking ─────────────────────────────
       const headers = req.headers;
       const forwardedFor = headers['x-forwarded-for'];
       if (forwardedFor) {
@@ -114,11 +152,11 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
         activeSpan.setAttribute('http.via', String(headers['via']));
       }
 
-      // ── Baggage from Frontend ───────────────────────────────────────
+      // ── Baggage from Frontend ──────────────────────────────────────
       const baggage = propagation.getBaggage(context.active());
       if (baggage) {
         for (const [key, entry] of baggage.getAllEntries()) {
-          if (key.startsWith('haoc.') || key.startsWith('page.') ||
+          if (key.startsWith('user.') || key.startsWith('page.') ||
               key.startsWith('browser.') || key.startsWith('device.') ||
               key.startsWith('app.')) {
             activeSpan.setAttribute(key, entry.value);
@@ -128,34 +166,43 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
     }
 
     // ── Request log ───────────────────────────────────────────────────
-    const reqAttrs: AttrRecord = {
-      'http.method': method,
-      'http.route': route,      'haoc.otel.profile': runtime.profile,    };
-    if (rawQuery) flattenToRecord(reqAttrs, 'haoc.request.query', rawQuery, 0, sensitiveFields);
-    if (rawParams) flattenToRecord(reqAttrs, 'haoc.request.params', rawParams, 0, sensitiveFields);
-    if (logBody && rawBody) flattenToRecord(reqAttrs, 'haoc.request.body', rawBody, 0, sensitiveFields);
+    // Skip log entirely for OPTIONS if profile says so
+    if (!preflight.isPreflight || preflight.shouldLog) {
+      const reqAttrs: AttrRecord = {
+        [ATTR_HTTP_REQUEST_METHOD]: method,
+        [ATTR_HTTP_ROUTE]: route,
+        [ATTR_HAOC_PROFILE]: runtime.profile,
+        [ATTR_HAOC_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
+        [ATTR_HAOC_LOG_TITLE]: `${method} ${route} [${traceId}]`,
+      };
+      if (rawQuery) flattenToRecord(reqAttrs, 'request.query', rawQuery, 0, sensitiveFields);
+      if (rawParams) flattenToRecord(reqAttrs, 'request.params', rawParams, 0, sensitiveFields);
 
-    // Use pino-http's logger attached to req if available, else console
-    const logger = (req as unknown as { log?: { info: Function; error: Function } }).log;
-    logger?.info(reqAttrs, `${method} ${route} [${traceId}]`);
-    otelEmit('info', {
-      msg: `${method} ${route} [${traceId}]`,
-      req: {
-        method,
-        url: req.url,
-        headers: {
-          host: req.headers['host'],
-          'user-agent': req.headers['user-agent'],
-          'content-type': req.headers['content-type'],
+      if (logBody && inputPayload) {
+        if (logPayloadMode === 'json-attr') {
+          const json = sanitizeToJsonAttr(inputPayload, { sensitiveFields, maxBytes: 16 * 1024 });
+          if (json) reqAttrs[ATTR_HAOC_REQUEST_JSON] = json;
+        } else if (logPayloadMode === 'flatten') {
+          flattenToRecord(reqAttrs, 'body', inputPayload, 0, sensitiveFields);
+        }
+      }
+      // User attrs are known at request time when identifyUser() was called in a middleware
+      Object.assign(reqAttrs, userAttrs);
+
+      const logger = (req as unknown as { log?: { info: Function; error: Function } }).log;
+      logger?.info(reqAttrs, `${method} ${route} [${traceId}]`);
+      otelEmit('info',
+        (logBody && inputPayload)
+          ? sanitizeNested(inputPayload, sensitiveFields) as Record<string, unknown>
+          : `${method} ${route} [${traceId}]`,
+        {
+          [ATTR_HAOC_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
+          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} [${traceId}]`,
+          [ATTR_HAOC_PROFILE]: runtime.profile,
+          ...userAttrs,
         },
-        ...(rawQuery ? { query: sanitizeNested(rawQuery, sensitiveFields) as Record<string, unknown> } : {}),
-        ...(logBody && rawBody ? { body: sanitizeNested(rawBody, sensitiveFields) as Record<string, unknown> } : {}),
-      },
-      service: process.env.OTEL_SERVICE_NAME,
-      environment: process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
-      requestPath: req.url,
-      'haoc.otel.profile': runtime.profile,
-    });
+      );
+    }
 
     // ── Response body buffer ─────────────────────────────────────────
     const MAX_RESPONSE_SIZE = 10 * 1024; // 10KB
@@ -181,7 +228,6 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
     } as typeof res.write;
 
     res.end = function (this: Response, ...args: unknown[]) {
-      // Capture final chunk if present
       const firstArg = args[0];
       if (!bufferOverflow && (captureResponse || logResponse) && firstArg && typeof firstArg !== 'function') {
         const buf = Buffer.isBuffer(firstArg) ? firstArg : Buffer.from(String(firstArg));
@@ -198,7 +244,7 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
       const statusCode = res.statusCode;
 
       if (activeSpan) {
-        activeSpan.setAttribute('http.status_code', statusCode);
+        activeSpan.setAttribute(ATTR_HTTP_RESPONSE_STATUS_CODE, statusCode);
         activeSpan.setAttribute('http.duration_ms', duration);
         if (statusCode >= 500) {
           activeSpan.setStatus({
@@ -220,61 +266,49 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
       }
 
       if (activeSpan && captureResponse && parsedResponseBody !== undefined) {
-        flattenToSpan(activeSpan, 'haoc.response.body', parsedResponseBody, 0, sensitiveFields);
+        flattenToSpan(activeSpan, 'response.body', parsedResponseBody, 0, sensitiveFields);
       }
 
-      const resAttrs: AttrRecord = {
-        'http.method': method,
-        'http.route': route,
-        'http.status_code': statusCode,
-        'http.duration_ms': duration,
-        'haoc.otel.profile': runtime.profile,
-      };
+      // Skip response log for OPTIONS if profile says so
+      if (!preflight.isPreflight || preflight.shouldLog) {
+        const resAttrs: AttrRecord = {
+          [ATTR_HTTP_REQUEST_METHOD]: method,
+          [ATTR_HTTP_ROUTE]: route,
+          [ATTR_HTTP_RESPONSE_STATUS_CODE]: statusCode,
+          'http.duration_ms': duration,
+          [ATTR_HAOC_PROFILE]: runtime.profile,
+          [ATTR_HAOC_LOG_EVENT]: statusCode >= 400 ? LOG_EVENT_ERROR : LOG_EVENT_RESPONSE,
+          [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+        };
 
-      if (logResponse && parsedResponseBody !== undefined) {
-        flattenToRecord(resAttrs, 'haoc.response.body', parsedResponseBody, 0, sensitiveFields);
-      }
+        if (logResponse && parsedResponseBody !== undefined && logPayloadMode === 'flatten') {
+          flattenToRecord(resAttrs, 'response.body', parsedResponseBody, 0, sensitiveFields);
+        }
 
-      if (statusCode >= 400) {
-        logger?.error(
-          resAttrs,
-          `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
-        );
-        otelEmit('error', {
-          msg: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
-          req: { method, url: req.url },
-          res: {
-            statusCode,
-            responseTime: duration,
-            ...(logResponse && parsedResponseBody !== undefined
-              ? { body: sanitizeNested(parsedResponseBody, sensitiveFields) as Record<string, unknown> }
-              : {}),
+        const logLevel = statusCode >= 400 ? 'error' : 'info';
+        const logger = (req as unknown as { log?: { info: Function; error: Function } }).log;
+        if (statusCode >= 400) {
+          logger?.error(resAttrs, `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`);
+        } else {
+          logger?.info(resAttrs, `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`);
+        }
+
+        const userAttrsOnClose = getUserSpanAttributes();
+        if (activeSpan) {
+          for (const [key, value] of Object.entries(userAttrsOnClose)) activeSpan.setAttribute(key, value);
+        }
+
+        otelEmit(logLevel as 'info' | 'error',
+          (logResponse && parsedResponseBody !== undefined)
+            ? sanitizeNested(parsedResponseBody, sensitiveFields) as Record<string, unknown>
+            : `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+          {
+            [ATTR_HAOC_LOG_EVENT]: statusCode >= 400 ? LOG_EVENT_ERROR : LOG_EVENT_RESPONSE,
+            [ATTR_HAOC_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
+            [ATTR_HAOC_PROFILE]: runtime.profile,
+            ...userAttrsOnClose,
           },
-          service: process.env.OTEL_SERVICE_NAME,
-          environment: process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
-          requestPath: req.url,
-          'haoc.otel.profile': runtime.profile,
-        });
-      } else {
-        logger?.info(
-          resAttrs,
-          `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
         );
-        otelEmit('info', {
-          msg: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
-          req: { method, url: req.url },
-          res: {
-            statusCode,
-            responseTime: duration,
-            ...(logResponse && parsedResponseBody !== undefined
-              ? { body: sanitizeNested(parsedResponseBody, sensitiveFields) as Record<string, unknown> }
-              : {}),
-          },
-          service: process.env.OTEL_SERVICE_NAME,
-          environment: process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
-          requestPath: req.url,
-          'haoc.otel.profile': runtime.profile,
-        });
       }
 
       return originalEnd.apply(this, args as never);
