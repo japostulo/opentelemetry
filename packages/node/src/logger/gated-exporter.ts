@@ -6,6 +6,14 @@ import type { ExportResult } from '@opentelemetry/core';
 import { ExportResultCode } from '@opentelemetry/core';
 
 import { isOtlpEnabled } from './config';
+import { HAOC_DIRECT_EMIT_ATTR } from './otel-emit';
+
+/**
+ * Attribute key added by the pino OTel instrumentation to identify
+ * records that came via pino's log bridge.
+ * @see https://opentelemetry.io/docs/specs/otel/logs/data-model/
+ */
+const PINO_HAOC_LOG_EVENT = 'log.event';
 
 /**
  * Wraps a {@link LogRecordExporter} so that {@link export} becomes a
@@ -19,6 +27,13 @@ import { isOtlpEnabled } from './config';
  * replaced without restarting the process).
  *
  * Pipeline always exists end-to-end; only the wire emission is gated.
+ *
+ * Additionally, this exporter deduplicates records: when both pino's
+ * auto-instrumentation AND `otelEmit` fire for the same HAOC trace event
+ * (identified by `log.event` attribute), only the `otelEmit` record
+ * (marked with `haoc.direct_emit: true`) is forwarded.  This prevents
+ * Express pino-http from creating plain-string-body duplicates alongside
+ * the structured-JSON-body records emitted by `otelEmit`.
  */
 export class GatedLogExporter implements LogRecordExporter {
   constructor(private readonly inner: LogRecordExporter) {}
@@ -33,7 +48,31 @@ export class GatedLogExporter implements LogRecordExporter {
       resultCallback({ code: ExportResultCode.SUCCESS });
       return;
     }
-    this.inner.export(logs, resultCallback);
+
+    // Drop pino-auto-instrumented duplicates of HAOC trace events.
+    // A record is a duplicate if it carries `log.event` (HAOC trace attr)
+    // but does NOT carry `haoc.direct_emit` (our own marker).
+    const filtered = logs.filter((record) => {
+      const attrs = record.attributes as Record<string, unknown>;
+      const hasLogEvent = attrs[PINO_HAOC_LOG_EVENT] !== undefined;
+      const isDirectEmit = attrs[HAOC_DIRECT_EMIT_ATTR] === true;
+      // Keep all non-HAOC-event records, and only keep HAOC events that
+      // came via otelEmit (not via pino instrumentation).
+      return !hasLogEvent || isDirectEmit;
+    });
+
+    if (filtered.length === 0) {
+      resultCallback({ code: ExportResultCode.SUCCESS });
+      return;
+    }
+
+    // Strip the internal dedup marker before forwarding so it does not
+    // appear as an attribute in SigNoz / the OTLP backend.
+    for (const r of filtered) {
+      delete (r.attributes as Record<string, unknown>)[HAOC_DIRECT_EMIT_ATTR];
+    }
+
+    this.inner.export(filtered, resultCallback);
   }
 
   shutdown(): Promise<void> {
