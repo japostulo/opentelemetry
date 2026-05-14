@@ -33,7 +33,7 @@ return [
     |   - `verbose`: legacy "everything on" behaviour.
     |
     */
-    'profile' => env('HAOC_OTEL_PROFILE', 'minimal'),
+    'profile' => env('OTEL_PROFILE', 'minimal'),
 
     /*
     |--------------------------------------------------------------------------
@@ -42,7 +42,7 @@ return [
     | Head-based sampler ratio for ParentBased(TraceIdRatioBased). 0..1.
     | Defaults: 1.0 in dev/local, 0.2 in production (resolved at runtime).
     */
-    'sample_ratio' => env('HAOC_OTEL_SAMPLE_RATIO'),
+    'sample_ratio' => env('OTEL_SAMPLE_RATIO'),
 
     /*
     |--------------------------------------------------------------------------
@@ -52,7 +52,7 @@ return [
     | middleware short-circuits — no span is created and no log is emitted.
     | Merged with the active profile defaults.
     */
-    'ignore_routes' => array_filter(explode(',', (string) env('HAOC_OTEL_IGNORE_ROUTES', ''))),
+    'ignore_routes' => array_filter(explode(',', (string) env('OTEL_IGNORE_ROUTES', ''))),
 
     /*
     |--------------------------------------------------------------------------
@@ -61,8 +61,8 @@ return [
     | Whether to flatten request/response bodies into span attributes.
     | Both default to FALSE in `minimal`; TRUE in `standard`/`verbose`.
     */
-    'capture_request_body' => env('HAOC_OTEL_CAPTURE_BODY'),
-    'capture_response_body' => env('HAOC_OTEL_CAPTURE_RESPONSE'),
+    'capture_request_body' => env('OTEL_CAPTURE_BODY'),
+    'capture_response_body' => env('OTEL_CAPTURE_RESPONSE'),
 
     /*
     |--------------------------------------------------------------------------

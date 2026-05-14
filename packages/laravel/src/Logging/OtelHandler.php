@@ -2,6 +2,7 @@
 
 namespace Haoc\OpenTelemetry\Logging;
 
+use Haoc\OpenTelemetry\Attributes\SemanticAttributes;
 use Monolog\Handler\AbstractProcessingHandler;
 use Monolog\Level;
 use Monolog\LogRecord;
@@ -60,7 +61,13 @@ class OtelHandler extends AbstractProcessingHandler
 
         $severity = self::MONOLOG_TO_OTEL[$record->level->value] ?? Severity::INFO;
 
-        $otelRecord = (new OtelLogRecord($record->message))
+        // Body is emitted as structured JSON so SigNoz activates the tree view:
+        //  - request log  → decoded haoc.request.json payload
+        //  - response log → decoded haoc.response.json payload
+        //  - other logs   → {"msg":"..."} fallback
+        // The clean one-line title is stored in haoc.log.title (configure it
+        // as the display column in SigNoz instead of body).
+        $otelRecord = (new OtelLogRecord($this->buildBody($record)))
             ->setTimestamp((int) ($record->datetime->format('U.u') * 1_000_000_000))
             ->setSeverityNumber($severity)
             ->setSeverityText($record->level->name);
@@ -70,7 +77,13 @@ class OtelHandler extends AbstractProcessingHandler
             // immediately (Resource attrs are immutable post-init).
             'haoc.otel.profile' => (string) config('haoc-otel.profile', 'minimal'),
         ];
+        // Keys already consumed as the log body — skip to avoid a duplicate
+        // string attribute alongside the structured body.
+        $bodyKeys = [SemanticAttributes::HAOC_REQUEST_JSON, SemanticAttributes::HAOC_RESPONSE_JSON];
         foreach ($record->context as $key => $value) {
+            if (in_array($key, $bodyKeys, true)) {
+                continue;
+            }
             if (is_scalar($value)) {
                 $attributes[$key] = $value;
             } elseif (is_array($value)) {
@@ -85,6 +98,37 @@ class OtelHandler extends AbstractProcessingHandler
         }
 
         $this->otelLogger->emit($otelRecord);
+    }
+
+    /**
+     * Build the body for the OTel log record.
+     *
+     * When the log context contains a request or response payload
+     * (haoc.request.json / haoc.response.json), the decoded array is returned
+     * directly so the OTel SDK serialises it as kvlist_value — which SigNoz
+     * renders as the JSON tree view in the detail panel.
+     *
+     * For logs without a payload (minimal profile, errors, etc.) the body
+     * falls back to the plain message string.
+     *
+     * @return array<string, mixed>|string
+     */
+    protected function buildBody(LogRecord $record): array|string
+    {
+        foreach ([
+            SemanticAttributes::HAOC_REQUEST_JSON,
+            SemanticAttributes::HAOC_RESPONSE_JSON,
+        ] as $key) {
+            $value = $record->context[$key] ?? null;
+            if (is_string($value) && $value !== '') {
+                $decoded = json_decode($value, true);
+                if (is_array($decoded)) {
+                    return $decoded;
+                }
+            }
+        }
+
+        return $record->message;
     }
 
     private function flattenArray(string $prefix, array $data, int $depth = 0): array
