@@ -89,10 +89,10 @@ function getEffectiveCaptureValue(serviceConfig: any, field: 'captureBody' | 'ca
 
 const generatedEnvVars = computed(() => {
   const lines: string[] = [
-    `HAOC_OTEL_PROFILE=${selectedProfile.value}`,
+    `OTEL_PROFILE=${selectedProfile.value}`,
   ];
-  if (captureBody.value !== null) lines.push(`HAOC_OTEL_CAPTURE_BODY=${captureBody.value}`);
-  if (captureResponse.value !== null) lines.push(`HAOC_OTEL_CAPTURE_RESPONSE=${captureResponse.value}`);
+  if (captureBody.value !== null) lines.push(`OTEL_CAPTURE_BODY=${captureBody.value}`);
+  if (captureResponse.value !== null) lines.push(`OTEL_CAPTURE_RESPONSE=${captureResponse.value}`);
   lines.push(`LOG_DESTINATION=${logDestination.value}`);
   return lines.join('\n');
 });

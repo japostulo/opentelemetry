@@ -24,7 +24,7 @@ const nodeProfiles = [
 
     <v-alert type="info" variant="tonal" density="compact" class="mb-6">
       <strong>Precedência:</strong> argumento programático &gt; variável de ambiente &gt; default do profile.
-      Exemplo: <code>HAOC_OTEL_CAPTURE_BODY=true</code> sobreescreve o profile <code>minimal</code>.
+      Exemplo: <code>OTEL_CAPTURE_BODY=true</code> sobreescreve o profile <code>minimal</code>.
     </v-alert>
 
     <ProfileComparison :profiles="nodeProfiles" title="Comparação de Profiles (Node.js)" />
@@ -59,16 +59,16 @@ const nodeProfiles = [
 
     <h3 class="text-h6 mb-2">Minimal com body capture via env</h3>
     <CodeBlock language="bash" :code="`# Profile minimal, mas com body capture ativo via env override
-HAOC_OTEL_PROFILE=minimal
-HAOC_OTEL_CAPTURE_BODY=true
-HAOC_OTEL_CAPTURE_RESPONSE=true`" />
+OTEL_PROFILE=minimal
+OTEL_CAPTURE_BODY=true
+OTEL_CAPTURE_RESPONSE=true`" />
 
     <h3 class="text-h6 mb-2 mt-4">Standard sem body nos logs para rotas pesadas</h3>
-    <CodeBlock language="bash" :code="`HAOC_OTEL_PROFILE=standard
-HAOC_OTEL_LOG_BODY_IGNORE_ROUTES=upload,import,bulk`" />
+    <CodeBlock language="bash" :code="`OTEL_PROFILE=standard
+OTEL_LOG_BODY_IGNORE_ROUTES=upload,import,bulk`" />
 
     <h3 class="text-h6 mb-2 mt-4">Body nos logs apenas para rotas específicas</h3>
-    <CodeBlock language="bash" :code="`HAOC_OTEL_PROFILE=minimal
-HAOC_OTEL_LOG_BODY_ONLY_ROUTES=checkout,payment,order`" />
+    <CodeBlock language="bash" :code="`OTEL_PROFILE=minimal
+OTEL_LOG_BODY_ONLY_ROUTES=checkout,payment,order`" />
   </div>
 </template>

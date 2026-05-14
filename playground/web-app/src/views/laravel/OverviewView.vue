@@ -60,7 +60,7 @@ import CodeBlock from '../../components/CodeBlock.vue';
 
     <CodeBlock language="bash" title=".env" :code="`OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 OTEL_SERVICE_NAME=minha-api-laravel
-HAOC_OTEL_PROFILE=standard
+OTEL_PROFILE=standard
 LOG_DESTINATION=both`" />
 
     <v-divider class="my-6" />

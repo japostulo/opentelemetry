@@ -1,10 +1,7 @@
-import { setupTracing, trace, context, resolveProfile, _resetRuntimeProfileCache, getRuntimeProfile } from '@haocruz/opentelemetry';
+import { setupTracing, trace, context, resolveProfile, _resetRuntimeProfileCache, getRuntimeProfile, identifyUser, getUser } from '@haocruz/opentelemetry';
 
 setupTracing({
   serviceName: 'playground-express',
-  // Exercise the new minimal profile so /favicon.ico, /health and static
-  // assets are dropped by the SDK before reaching SigNoz.
-  profile: 'minimal',
 });
 
 import express from 'express';
@@ -17,7 +14,7 @@ app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header(
     'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, traceparent, tracestate, baggage, X-Request-ID',
+    'Content-Type, Authorization, traceparent, tracestate, baggage, X-Request-ID, x-user-id, x-user-role',
   );
   res.header('Access-Control-Expose-Headers', 'X-Trace-Id');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -98,6 +95,95 @@ app.get('/slow', async (req, res) => {
   });
 });
 
+// ── User Identity ──────────────────────────────────────────────────────────
+
+/**
+ * Simulates JWT/API-key auth middleware for playground tests.
+ * In a real app, verify a JWT and extract the user from it.
+ *
+ * Test:
+ *   curl -H "x-user-id: usr_42" http://localhost:3020/secured/profile
+ *   curl -H "x-user-id: usr_99" -H "x-user-role: admin" http://localhost:3020/secured/profile
+ *   curl http://localhost:3020/secured/profile       # → 401
+ */
+function fakeAuth(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction,
+): void {
+  const userId = req.headers['x-user-id'] as string | undefined;
+  if (!userId) {
+    res.status(401).json({ error: 'Missing x-user-id header' });
+    return;
+  }
+  const role = (req.headers['x-user-role'] as string | undefined) ?? 'viewer';
+
+  // identifyUser stores the identity in the async context AND writes to the active span
+  identifyUser({ id: userId, role, type: 'authenticated' });
+  next();
+}
+
+/** No guard — shows identifyUser() used inline (e.g. after looking up a session). */
+app.get('/identity', (req, res) => {
+  const span = trace.getSpan(context.active());
+
+  // In a real app this data would come from a JWT or session lookup
+  const userId = (req.headers['x-user-id'] as string | undefined) ?? 'anon';
+  identifyUser({ id: userId, type: 'authenticated' });
+
+  res.json({
+    service: 'express',
+    traceId: span?.spanContext().traceId ?? 'none',
+    user: getUser(),
+    tip: 'Check SigNoz — user.id / user.role / user.type are on the span and logs',
+  });
+});
+
+app.get('/secured/profile', fakeAuth, (req, res) => {
+  const span = trace.getSpan(context.active());
+  const user = getUser();
+  res.json({
+    service: 'express',
+    traceId: span?.spanContext().traceId ?? 'none',
+    user,
+    message: `Hello, ${user?.id ?? 'stranger'}! Your role is ${user?.role ?? 'unknown'}.`,
+  });
+});
+
+app.post('/secured/action', fakeAuth, (req, res) => {
+  const span = trace.getSpan(context.active());
+  const user = getUser();
+  res.json({
+    service: 'express',
+    traceId: span?.spanContext().traceId ?? 'none',
+    user,
+    performed: req.body,
+    result: 'ok',
+  });
+});
+
+app.get('/secured/chain-auth', fakeAuth, async (req, res) => {
+  const span = trace.getSpan(context.active());
+  const user = getUser();
+  try {
+    const upstream = await fetch('http://nestjs-app:3010/secured/profile', {
+      headers: {
+        'x-user-id': user?.id ?? '',
+        'x-user-role': user?.role ?? 'viewer',
+      },
+    });
+    const downstream = await upstream.json();
+    res.json({
+      service: 'express',
+      traceId: span?.spanContext().traceId ?? 'none',
+      user,
+      downstream,
+    });
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : 'upstream failed' });
+  }
+});
+
 const port = Number(process.env.PORT) || 3020;
 app.listen(port, () => {
   console.log(`Express playground listening on :${port}`);
@@ -112,6 +198,7 @@ function serializeProfile(resolved: ReturnType<typeof resolveProfile>) {
     captureResponseBody: resolved.captureResponseBody,
     logRequestBody: resolved.logRequestBody,
     logResponseBody: resolved.logResponseBody,
+    logPayloadMode: resolved.logPayloadMode,
     ignoreRoutes: resolved.ignoreRoutes.map((r) => r.source),
     logBodyIgnoreRoutes: resolved.logBodyIgnoreRoutes.map((r) => r.source),
     logBodyOnlyRoutes: resolved.logBodyOnlyRoutes.map((r) => r.source),
@@ -119,11 +206,11 @@ function serializeProfile(resolved: ReturnType<typeof resolveProfile>) {
 }
 
 app.get('/admin/config', (_req, res) => {
-  const captureBodyRaw = process.env.HAOC_OTEL_CAPTURE_BODY;
-  const captureResponseRaw = process.env.HAOC_OTEL_CAPTURE_RESPONSE;
+  const captureBodyRaw = process.env.OTEL_CAPTURE_BODY;
+  const captureResponseRaw = process.env.OTEL_CAPTURE_RESPONSE;
   res.json({
     service: 'express',
-    profile: process.env.HAOC_OTEL_PROFILE || 'minimal',
+    profile: process.env.OTEL_PROFILE || 'minimal',
     captureBody: captureBodyRaw === 'true' ? true : captureBodyRaw === 'false' ? false : null,
     captureResponse:
       captureResponseRaw === 'true' ? true : captureResponseRaw === 'false' ? false : null,
@@ -137,29 +224,31 @@ app.put('/admin/config', (req, res) => {
     captureBody?: boolean | null;
     captureResponse?: boolean | null;
     logDestination?: string;
+    logPayloadMode?: string;
   };
-  if (body.profile !== undefined) process.env.HAOC_OTEL_PROFILE = body.profile;
+  if (body.profile !== undefined) process.env.OTEL_PROFILE = body.profile;
   if (body.captureBody !== undefined && body.captureBody !== null) {
-    process.env.HAOC_OTEL_CAPTURE_BODY = String(body.captureBody);
+    process.env.OTEL_CAPTURE_BODY = String(body.captureBody);
   } else if (body.captureBody === null) {
-    delete process.env.HAOC_OTEL_CAPTURE_BODY;
+    delete process.env.OTEL_CAPTURE_BODY;
   }
   if (body.captureResponse !== undefined && body.captureResponse !== null) {
-    process.env.HAOC_OTEL_CAPTURE_RESPONSE = String(body.captureResponse);
+    process.env.OTEL_CAPTURE_RESPONSE = String(body.captureResponse);
   } else if (body.captureResponse === null) {
-    delete process.env.HAOC_OTEL_CAPTURE_RESPONSE;
+    delete process.env.OTEL_CAPTURE_RESPONSE;
   }
   if (body.logDestination !== undefined) process.env.LOG_DESTINATION = body.logDestination;
+  if (body.logPayloadMode !== undefined) process.env.OTEL_LOG_PAYLOAD_MODE = body.logPayloadMode;
 
   const resolved = resolveProfile();
-  process.env.HAOC_OTEL_RESOLVED_PROFILE = JSON.stringify(serializeProfile(resolved));
+  process.env.OTEL_RESOLVED_PROFILE = JSON.stringify(serializeProfile(resolved));
   _resetRuntimeProfileCache();
 
-  const captureBodyRaw = process.env.HAOC_OTEL_CAPTURE_BODY;
-  const captureResponseRaw = process.env.HAOC_OTEL_CAPTURE_RESPONSE;
+  const captureBodyRaw = process.env.OTEL_CAPTURE_BODY;
+  const captureResponseRaw = process.env.OTEL_CAPTURE_RESPONSE;
   res.json({
     service: 'express',
-    profile: process.env.HAOC_OTEL_PROFILE || 'minimal',
+    profile: process.env.OTEL_PROFILE || 'minimal',
     captureBody: captureBodyRaw === 'true' ? true : captureBodyRaw === 'false' ? false : null,
     captureResponse:
       captureResponseRaw === 'true' ? true : captureResponseRaw === 'false' ? false : null,
@@ -172,10 +261,10 @@ app.get('/admin/debug', (_req, res) => {
   res.json({
     service: 'express',
     processEnv: {
-      HAOC_OTEL_PROFILE: process.env.HAOC_OTEL_PROFILE,
-      HAOC_OTEL_CAPTURE_BODY: process.env.HAOC_OTEL_CAPTURE_BODY,
-      HAOC_OTEL_CAPTURE_RESPONSE: process.env.HAOC_OTEL_CAPTURE_RESPONSE,
-      HAOC_OTEL_RESOLVED_PROFILE: process.env.HAOC_OTEL_RESOLVED_PROFILE,
+      OTEL_PROFILE: process.env.OTEL_PROFILE,
+      OTEL_CAPTURE_BODY: process.env.OTEL_CAPTURE_BODY,
+      OTEL_CAPTURE_RESPONSE: process.env.OTEL_CAPTURE_RESPONSE,
+      OTEL_RESOLVED_PROFILE: process.env.OTEL_RESOLVED_PROFILE,
       LOG_DESTINATION: process.env.LOG_DESTINATION,
     },
     runtimeProfile: {
@@ -184,6 +273,7 @@ app.get('/admin/debug', (_req, res) => {
       captureResponseBody: runtime.captureResponseBody,
       logRequestBody: runtime.logRequestBody,
       logResponseBody: runtime.logResponseBody,
+      logPayloadMode: runtime.logPayloadMode,
     },
   });
 });

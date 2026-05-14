@@ -22,13 +22,13 @@ export const requestBodyScenarios: TestScenario[] = [
     signozValidation: 'Tags → deve ter body.name="Test User", body.password="[REDACTED]", body.cpf="[REDACTED]", body.message="Hello from playground!"',
   },
   {
-    id: 'A3', app: 'NestJS', profile: 'minimal', envOverride: 'HAOC_OTEL_CAPTURE_BODY=true',
+    id: 'A3', app: 'NestJS', profile: 'minimal', envOverride: 'OTEL_CAPTURE_BODY=true',
     endpoint: 'http://localhost:3010/echo', method: 'POST', body: echoBody,
     expected: 'body.* presente (env override > profile)',
     signozValidation: 'Tags → body.* presente mesmo com profile minimal — env var tem precedência',
   },
   {
-    id: 'A4', app: 'NestJS', profile: 'standard', envOverride: 'HAOC_OTEL_CAPTURE_BODY=false',
+    id: 'A4', app: 'NestJS', profile: 'standard', envOverride: 'OTEL_CAPTURE_BODY=false',
     endpoint: 'http://localhost:3010/echo', method: 'POST', body: echoBody,
     expected: 'SEM body.* (env override > profile)',
     signozValidation: 'Tags → SEM body.* mesmo com standard — env var false tem precedência',
@@ -46,7 +46,7 @@ export const requestBodyScenarios: TestScenario[] = [
     signozValidation: 'Tags → body.name="Test User", body.password="[REDACTED]"',
   },
   {
-    id: 'A7', app: 'Express', profile: 'minimal', envOverride: 'HAOC_OTEL_CAPTURE_BODY=true',
+    id: 'A7', app: 'Express', profile: 'minimal', envOverride: 'OTEL_CAPTURE_BODY=true',
     endpoint: 'http://localhost:3020/echo', method: 'POST', body: echoBody,
     expected: 'body.* presente (env override)',
     signozValidation: 'Tags → body.* presente com env override',
@@ -64,13 +64,13 @@ export const requestBodyScenarios: TestScenario[] = [
     signozValidation: 'Tags → body.name="Test User", body.password="[REDACTED]"',
   },
   {
-    id: 'A10', app: 'Laravel', profile: 'minimal', envOverride: 'HAOC_OTEL_CAPTURE_BODY=true',
+    id: 'A10', app: 'Laravel', profile: 'minimal', envOverride: 'OTEL_CAPTURE_BODY=true',
     endpoint: 'http://localhost:8085/api/echo', method: 'POST', body: echoBody,
     expected: 'body.* presente (env override)',
     signozValidation: 'Tags → body.* presente com env override',
   },
   {
-    id: 'A11', app: 'Laravel', profile: 'standard', envOverride: 'HAOC_OTEL_CAPTURE_BODY=false',
+    id: 'A11', app: 'Laravel', profile: 'standard', envOverride: 'OTEL_CAPTURE_BODY=false',
     endpoint: 'http://localhost:8085/api/echo', method: 'POST', body: echoBody,
     expected: 'SEM body.* (env override)',
     signozValidation: 'Tags → SEM body.* — env false sobreescreve standard',
@@ -91,7 +91,7 @@ export const responseBodyScenarios: TestScenario[] = [
     signozValidation: 'Tags → response.name="Test User", response.password="[REDACTED]", response.message presente',
   },
   {
-    id: 'B3', app: 'NestJS', profile: 'minimal', envOverride: 'HAOC_OTEL_CAPTURE_RESPONSE=true',
+    id: 'B3', app: 'NestJS', profile: 'minimal', envOverride: 'OTEL_CAPTURE_RESPONSE=true',
     endpoint: 'http://localhost:3010/echo', method: 'POST', body: echoBody,
     expected: 'response.* presente (env override)',
     signozValidation: 'Tags → response.* presente com env override',
@@ -109,7 +109,7 @@ export const responseBodyScenarios: TestScenario[] = [
     signozValidation: 'Tags → response.* presente com campos sensíveis redatados',
   },
   {
-    id: 'B6', app: 'Express', profile: 'minimal', envOverride: 'HAOC_OTEL_CAPTURE_RESPONSE=true',
+    id: 'B6', app: 'Express', profile: 'minimal', envOverride: 'OTEL_CAPTURE_RESPONSE=true',
     endpoint: 'http://localhost:3020/echo', method: 'POST', body: echoBody,
     expected: 'response.* presente (env override)',
     signozValidation: 'Tags → response.* presente com env override',
@@ -290,16 +290,40 @@ export const redactionScenarios: TestScenario[] = [
 ];
 
 export const identityBaggageScenarios: TestScenario[] = [
+  // ── Forma 1: via header (guard/middleware extrai e chama identifyUser) ────
   {
-    id: 'G1', app: 'NestJS', profile: 'minimal', endpoint: 'http://localhost:3010/identity',
-    expected: 'Span com haoc.user.id, haoc.user.role, haoc.user.type=authenticated',
-    signozValidation: 'Tags → haoc.user.id presente, haoc.user.role presente, haoc.user.type=authenticated',
+    id: 'G1', app: 'NestJS', profile: 'minimal', endpoint: 'http://localhost:3010/secured/profile',
+    method: 'GET' as const,
+    headers: { 'x-user-id': 'usr_42', 'x-user-role': 'admin' },
+    expected: 'Forma 1 (guard + header) → user.id=usr_42, user.role=admin, user.type=authenticated',
+    signozValidation: 'Traces → serviceName=playground-nestjs → span GET /secured/profile → Tags: user.id=usr_42, user.role=admin, user.type=authenticated',
   },
   {
-    id: 'G2', app: 'Laravel', profile: 'minimal', endpoint: 'http://localhost:8085/api/hello',
-    expected: 'Sem user (não autenticado) — haoc.user.* ausentes',
-    signozValidation: 'Tags → NÃO deve ter haoc.user.* (request sem autenticação)',
+    id: 'G2', app: 'NestJS', profile: 'minimal', endpoint: 'http://localhost:3010/secured/profile',
+    expected: 'Forma 1 — sem header → 401 Unauthorized. Span sem user.*',
+    signozValidation: 'Span GET /secured/profile → http.status_code=401. Tags: user.id ausente.',
   },
+  // ── Forma 2: auth interna (backend chama identifyUser() diretamente) ──────
+  {
+    id: 'G3', app: 'NestJS', profile: 'minimal', endpoint: 'http://localhost:3010/identity',
+    method: 'GET' as const,
+    expected: 'Forma 2 (auth interna) → user.id=usr_demo_123, user.role=operator no span',
+    signozValidation: 'Traces → serviceName=playground-nestjs → span GET /identity → Tags: user.id=usr_demo_123, user.role=operator, user.type=authenticated',
+  },
+  {
+    id: 'G4', app: 'Express', profile: 'minimal', endpoint: 'http://localhost:3020/secured/profile',
+    method: 'GET' as const,
+    headers: { 'x-user-id': 'usr_99', 'x-user-role': 'operator' },
+    expected: 'Forma 1 (middleware + header) → user.id=usr_99, user.role=operator',
+    signozValidation: 'Traces → serviceName=playground-express → span GET /secured/profile → Tags: user.id=usr_99, user.role=operator',
+  },
+  {
+    id: 'G5', app: 'Express', profile: 'minimal', endpoint: 'http://localhost:3020/identity',
+    method: 'GET' as const,
+    expected: 'Forma 2 (auth interna Express) → user.id no span',
+    signozValidation: 'Traces → serviceName=playground-express → span GET /identity → Tags: user.id presente',
+  },
+  // ── Baggage ───────────────────────────────────────────────────────────────
   {
     id: 'H1', app: 'Web → NestJS', profile: 'minimal', endpoint: 'http://localhost:3010/hello',
     expected: 'Baggage propagado: page.*, browser.*, device.* no span do NestJS',

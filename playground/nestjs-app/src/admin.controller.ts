@@ -8,6 +8,7 @@ function serializeProfile(resolved: ReturnType<typeof resolveProfile>) {
     captureResponseBody: resolved.captureResponseBody,
     logRequestBody: resolved.logRequestBody,
     logResponseBody: resolved.logResponseBody,
+    logPayloadMode: resolved.logPayloadMode,
     ignoreRoutes: resolved.ignoreRoutes.map((r) => r.source),
     logBodyIgnoreRoutes: resolved.logBodyIgnoreRoutes.map((r) => r.source),
     logBodyOnlyRoutes: resolved.logBodyOnlyRoutes.map((r) => r.source),
@@ -18,9 +19,9 @@ function serializeProfile(resolved: ReturnType<typeof resolveProfile>) {
 export class AdminController {
   @Get('config')
   getConfig() {
-    const profile = process.env.HAOC_OTEL_PROFILE || 'minimal';
-    const captureBodyRaw = process.env.HAOC_OTEL_CAPTURE_BODY;
-    const captureResponseRaw = process.env.HAOC_OTEL_CAPTURE_RESPONSE;
+    const profile = process.env.OTEL_PROFILE || 'minimal';
+    const captureBodyRaw = process.env.OTEL_CAPTURE_BODY;
+    const captureResponseRaw = process.env.OTEL_CAPTURE_RESPONSE;
 
     return {
       service: 'nestjs',
@@ -38,10 +39,10 @@ export class AdminController {
     return {
       service: 'nestjs',
       processEnv: {
-        HAOC_OTEL_PROFILE: process.env.HAOC_OTEL_PROFILE,
-        HAOC_OTEL_CAPTURE_BODY: process.env.HAOC_OTEL_CAPTURE_BODY,
-        HAOC_OTEL_CAPTURE_RESPONSE: process.env.HAOC_OTEL_CAPTURE_RESPONSE,
-        HAOC_OTEL_RESOLVED_PROFILE: process.env.HAOC_OTEL_RESOLVED_PROFILE,
+        OTEL_PROFILE: process.env.OTEL_PROFILE,
+        OTEL_CAPTURE_BODY: process.env.OTEL_CAPTURE_BODY,
+        OTEL_CAPTURE_RESPONSE: process.env.OTEL_CAPTURE_RESPONSE,
+        OTEL_RESOLVED_PROFILE: process.env.OTEL_RESOLVED_PROFILE,
         LOG_DESTINATION: process.env.LOG_DESTINATION,
       },
       runtimeProfile: {
@@ -50,6 +51,7 @@ export class AdminController {
         captureResponseBody: runtime.captureResponseBody,
         logRequestBody: runtime.logRequestBody,
         logResponseBody: runtime.logResponseBody,
+        logPayloadMode: runtime.logPayloadMode,
       },
     };
   }
@@ -62,24 +64,26 @@ export class AdminController {
       captureBody?: boolean | null;
       captureResponse?: boolean | null;
       logDestination?: string;
+      logPayloadMode?: string;
     },
   ) {
-    if (body.profile !== undefined) process.env.HAOC_OTEL_PROFILE = body.profile;
+    if (body.profile !== undefined) process.env.OTEL_PROFILE = body.profile;
     if (body.captureBody !== undefined && body.captureBody !== null) {
-      process.env.HAOC_OTEL_CAPTURE_BODY = String(body.captureBody);
+      process.env.OTEL_CAPTURE_BODY = String(body.captureBody);
     } else if (body.captureBody === null) {
-      delete process.env.HAOC_OTEL_CAPTURE_BODY;
+      delete process.env.OTEL_CAPTURE_BODY;
     }
     if (body.captureResponse !== undefined && body.captureResponse !== null) {
-      process.env.HAOC_OTEL_CAPTURE_RESPONSE = String(body.captureResponse);
+      process.env.OTEL_CAPTURE_RESPONSE = String(body.captureResponse);
     } else if (body.captureResponse === null) {
-      delete process.env.HAOC_OTEL_CAPTURE_RESPONSE;
+      delete process.env.OTEL_CAPTURE_RESPONSE;
     }
     if (body.logDestination !== undefined) process.env.LOG_DESTINATION = body.logDestination;
+    if (body.logPayloadMode !== undefined) process.env.OTEL_LOG_PAYLOAD_MODE = body.logPayloadMode;
 
     // Re-resolve the profile with the new env vars and update the cached env var
     const resolved = resolveProfile();
-    process.env.HAOC_OTEL_RESOLVED_PROFILE = JSON.stringify(serializeProfile(resolved));
+    process.env.OTEL_RESOLVED_PROFILE = JSON.stringify(serializeProfile(resolved));
 
     // Clear the in-memory cache so the next request uses the new profile
     _resetRuntimeProfileCache();

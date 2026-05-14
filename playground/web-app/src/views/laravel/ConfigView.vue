@@ -7,16 +7,16 @@ const envVars = [
   { name: 'OTEL_EXPORTER_OTLP_ENDPOINT', type: 'string', default: 'http://localhost:4318', required: true, description: 'Endpoint do collector OTLP (HTTP)' },
   { name: 'OTEL_SERVICE_NAME', type: 'string', required: true, description: 'Nome do serviço no SigNoz' },
   { name: 'OTEL_ENVIRONMENT', type: 'string', default: 'local', description: 'Ambiente (via APP_ENV se não definido)' },
-  { name: 'HAOC_OTEL_PROFILE', type: 'string', default: 'minimal', description: 'Profile: minimal | standard | verbose' },
-  { name: 'HAOC_OTEL_CAPTURE_BODY', type: 'boolean', description: 'Override: captura request body' },
-  { name: 'HAOC_OTEL_CAPTURE_RESPONSE', type: 'boolean', description: 'Override: captura response body' },
+  { name: 'OTEL_PROFILE', type: 'string', default: 'minimal', description: 'Profile: minimal | standard | verbose' },
+  { name: 'OTEL_CAPTURE_BODY', type: 'boolean', description: 'Override: captura request body' },
+  { name: 'OTEL_CAPTURE_RESPONSE', type: 'boolean', description: 'Override: captura response body' },
   { name: 'LOG_DESTINATION', type: 'string', default: 'both', description: 'Destino dos logs: both | console | signoz | none' },
   { name: 'LOG_LEVEL', type: 'string', default: 'info', description: 'Nível mínimo de log' },
   { name: 'APP_ENV', type: 'string', default: 'local', description: 'Usado como fallback para OTEL_ENVIRONMENT' },
 ];
 
 const configKeys = [
-  { name: 'profile', type: 'string', default: "'minimal'", description: "Profile baseline — env(HAOC_OTEL_PROFILE)" },
+  { name: 'profile', type: 'string', default: "'minimal'", description: "Profile baseline — env(OTEL_PROFILE)" },
   { name: 'service_name', type: 'string', description: "env(OTEL_SERVICE_NAME, 'laravel')" },
   { name: 'otlp_endpoint', type: 'string', description: "env(OTEL_EXPORTER_OTLP_ENDPOINT, 'http://localhost:4318')" },
   { name: 'environment', type: 'string', description: "env(OTEL_ENVIRONMENT, env(APP_ENV, 'local'))" },
@@ -41,7 +41,7 @@ const laravelProfiles = [
     </p>
 
     <v-alert type="info" variant="tonal" density="compact" class="mb-6">
-      <strong>Precedência:</strong> Variável de ambiente (<code>HAOC_OTEL_CAPTURE_BODY</code>) &gt; Default do profile
+      <strong>Precedência:</strong> Variável de ambiente (<code>OTEL_CAPTURE_BODY</code>) &gt; Default do profile
     </v-alert>
 
     <h2 class="text-h5 font-weight-bold mb-3">Variáveis de Ambiente</h2>
@@ -63,7 +63,7 @@ const laravelProfiles = [
     <CodeBlock language="php" title="config/haoc-otel.php" :code="`<?php
 
 return [
-    'profile'      => env('HAOC_OTEL_PROFILE', 'minimal'),
+    'profile'      => env('OTEL_PROFILE', 'minimal'),
     'service_name' => env('OTEL_SERVICE_NAME', 'laravel'),
     'otlp_endpoint' => env('OTEL_EXPORTER_OTLP_ENDPOINT', 'http://localhost:4318'),
     'environment'  => env('OTEL_ENVIRONMENT', env('APP_ENV', 'local')),

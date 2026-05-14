@@ -38,7 +38,7 @@ import CodeBlock from '../../components/CodeBlock.vue';
         <v-list density="compact">
           <v-list-item prepend-icon="mdi-account-outline">
             <v-list-item-title>Identidade de usuário</v-list-item-title>
-            <v-list-item-subtitle>haoc.user.id, role, type — propagados automaticamente</v-list-item-subtitle>
+            <v-list-item-subtitle>user.id, user.role, user.type — via identifyUser() em guard/middleware</v-list-item-subtitle>
           </v-list-item>
           <v-list-item prepend-icon="mdi-tune-vertical">
             <v-list-item-title>3 Profiles de ruído</v-list-item-title>
@@ -124,7 +124,7 @@ app.listen(3000);`" />
       <tbody>
         <tr>
           <td><code>@haocruz/opentelemetry</code></td>
-          <td>Core: <code>setupTracing</code>, <code>setUser</code>, <code>getUser</code>, re-export do <code>@opentelemetry/api</code></td>
+          <td>Core: <code>setupTracing</code>, <code>identifyUser</code>, <code>setUser</code>, <code>getUser</code>, re-export do <code>@opentelemetry/api</code></td>
         </tr>
         <tr>
           <td><code>@haocruz/opentelemetry/nestjs</code></td>

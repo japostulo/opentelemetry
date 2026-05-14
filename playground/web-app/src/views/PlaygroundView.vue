@@ -33,9 +33,9 @@ function triggerJsError() {
           <v-table density="compact">
             <thead><tr><th>Variável</th><th>Valor Atual</th><th>Opções</th></tr></thead>
             <tbody>
-              <tr><td><code>HAOC_OTEL_PROFILE</code></td><td>Definido no docker-compose.yml (padrão inicial)</td><td><code>minimal</code> | <code>standard</code> | <code>verbose</code></td></tr>
-              <tr><td><code>HAOC_OTEL_CAPTURE_BODY</code></td><td>—</td><td><code>true</code> | <code>false</code> (override do profile)</td></tr>
-              <tr><td><code>HAOC_OTEL_CAPTURE_RESPONSE</code></td><td>—</td><td><code>true</code> | <code>false</code> (override do profile)</td></tr>
+              <tr><td><code>OTEL_PROFILE</code></td><td>Definido no docker-compose.yml (padrão inicial)</td><td><code>minimal</code> | <code>standard</code> | <code>verbose</code></td></tr>
+              <tr><td><code>OTEL_CAPTURE_BODY</code></td><td>—</td><td><code>true</code> | <code>false</code> (override do profile)</td></tr>
+              <tr><td><code>OTEL_CAPTURE_RESPONSE</code></td><td>—</td><td><code>true</code> | <code>false</code> (override do profile)</td></tr>
               <tr><td><code>LOG_DESTINATION</code></td><td>both</td><td><code>both</code> | <code>console</code> | <code>signoz</code> | <code>none</code></td></tr>
             </tbody>
           </v-table>

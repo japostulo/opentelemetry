@@ -22,9 +22,9 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 OTEL_SERVICE_NAME=minha-api-laravel
 
 # Opcionais
-HAOC_OTEL_PROFILE=standard
-HAOC_OTEL_CAPTURE_BODY=true
-HAOC_OTEL_CAPTURE_RESPONSE=true
+OTEL_PROFILE=standard
+OTEL_CAPTURE_BODY=true
+OTEL_CAPTURE_RESPONSE=true
 LOG_DESTINATION=both
 OTEL_ENVIRONMENT=production`" />
 
@@ -90,7 +90,7 @@ return Application::configure(basePath: dirname(__DIR__))
       OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4318
       OTEL_SERVICE_NAME: minha-api-laravel
       OTEL_ENVIRONMENT: production
-      HAOC_OTEL_PROFILE: standard
+      OTEL_PROFILE: standard
       LOG_DESTINATION: both
     extra_hosts:
       - 'host.docker.internal:host-gateway'`" />

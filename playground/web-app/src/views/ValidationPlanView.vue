@@ -191,13 +191,25 @@ const scenarios: Scenario[] = [
   // ── F: Identity & Baggage ────────────────────────────────────────────────
   {
     id: 'F1', category: 'Identity & Baggage', profile: 'minimal', service: 'NestJS', method: 'GET',
-    endpoint: 'http://localhost:3010/identity',
-    description: 'setUser() — identidade do usuário no span',
-    expected: 'user.id="user-123", user.role="admin", user.type="authenticated" nos atributos do span.',
+    endpoint: 'http://localhost:3010/secured/profile',
+    description: 'identifyUser() via guard — user.id/role/type no span e no log',
+    expected: 'user.id="usr_42", user.role="admin", user.type="authenticated" no span e no log de resposta. (Header: x-user-id: usr_42, x-user-role: admin)',
     signozSteps: [
       'Traces → filtrar: serviceName=playground-nestjs',
-      'Span "GET /identity"',
-      'Tags: user.id = "user-123", user.role = "admin"',
+      'Span "GET /secured/profile"',
+      'Tags: user.id = "usr_42", user.role = "admin", user.type = "authenticated"',
+      'Logs → mesmos atributos no log de resposta',
+    ],
+  },
+  {
+    id: 'F2b', category: 'Identity & Baggage', profile: 'minimal', service: 'Express', method: 'GET',
+    endpoint: 'http://localhost:3020/secured/profile',
+    description: 'identifyUser() via middleware Express — user.id/role/type no span',
+    expected: 'user.id="usr_99", user.role="operator", user.type="authenticated" no span. (Header: x-user-id: usr_99, x-user-role: operator)',
+    signozSteps: [
+      'Traces → filtrar: serviceName=playground-express',
+      'Span "GET /secured/profile"',
+      'Tags: user.id = "usr_99", user.role = "operator", user.type = "authenticated"',
     ],
   },
 

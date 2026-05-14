@@ -8,6 +8,7 @@ export interface TestScenario {
   envOverride?: string;
   endpoint: string;
   method?: string;
+  headers?: Record<string, string>;
   body?: string;
   expected: string;
   signozValidation: string;
@@ -36,9 +37,12 @@ async function executeTest(scenario: TestScenario) {
   results.value[scenario.id] = {};
   try {
     const options: RequestInit = { method: scenario.method || 'GET' };
+    const extraHeaders: Record<string, string> = scenario.headers ? { ...scenario.headers } : {};
     if (scenario.body) {
-      options.headers = { 'Content-Type': 'application/json' };
+      options.headers = { 'Content-Type': 'application/json', ...extraHeaders };
       options.body = scenario.body;
+    } else if (Object.keys(extraHeaders).length > 0) {
+      options.headers = extraHeaders;
     }
     const res = await fetch(scenario.endpoint, options);
     let data: unknown;

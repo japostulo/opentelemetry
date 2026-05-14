@@ -10,15 +10,15 @@ const initTracingOptions = [
 ];
 
 const setUserParams = [
-  { name: 'id', type: 'string', description: 'ID do usuário (será propagado como haoc.user.id no baggage)' },
+  { name: 'id', type: 'string', description: 'ID do usuário (será propagado como user.id no baggage)' },
   { name: 'role', type: 'string', description: 'Role do usuário (ex: admin, viewer)' },
   { name: 'type', type: "'authenticated' | 'anonymous' | 'service'", default: "'authenticated'", description: 'Tipo de identidade' },
 ];
 
 const baggageItems = [
-  { name: 'haoc.user.id', type: 'string', description: 'ID do usuário setado via setUser()' },
-  { name: 'haoc.user.role', type: 'string', description: 'Role do usuário' },
-  { name: 'haoc.user.type', type: 'string', description: 'Tipo de identidade' },
+  { name: 'user.id', type: 'string', description: 'ID do usuário setado via setUser()' },
+  { name: 'user.role', type: 'string', description: 'Role do usuário' },
+  { name: 'user.type', type: 'string', description: 'Tipo de identidade' },
   { name: 'page.url', type: 'string', description: 'URL completa da página atual' },
   { name: 'page.title', type: 'string', description: 'document.title' },
   { name: 'page.referrer', type: 'string', description: 'document.referrer' },

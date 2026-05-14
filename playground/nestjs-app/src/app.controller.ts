@@ -2,7 +2,7 @@ import {
   Controller, Get, Post, Body,
   HttpException, HttpStatus, Query,
 } from '@nestjs/common';
-import { trace, context, SpanStatusCode, setUser, getUser } from '@haocruz/opentelemetry';
+import { trace, context, SpanStatusCode, identifyUser, getUser } from '@haocruz/opentelemetry';
 
 @Controller()
 export class AppController {
@@ -106,13 +106,21 @@ export class AppController {
   identity() {
     const span = trace.getSpan(context.active());
 
-    setUser({ id: 'user-123', role: 'admin', type: 'authenticated' });
-    const user = getUser();
+    // Demonstrates: identifyUser() called INSIDE the handler.
+    // The span gets user attrs immediately (written directly to span).
+    // However, log attributes won't include user attrs because RxJS's
+    // tap() runs in a separate async context created before identifyUser().
+    //
+    // ⚠️  BEST PRACTICE: call identifyUser() in a guard/middleware BEFORE
+    //     the handler — that way BOTH spans AND logs get user attributes.
+    //     See SecuredController + FakeAuthGuard for the recommended pattern.
+    identifyUser({ id: 'usr_demo_123', role: 'operator', type: 'authenticated' });
 
     return {
       service: 'nestjs',
       traceId: span?.spanContext().traceId ?? 'none',
-      user,
+      user: getUser(),
+      tip: 'Check SigNoz — user.id / user.role / user.type are on the span. For logs too, use a guard (see /secured routes).',
     };
   }
 }

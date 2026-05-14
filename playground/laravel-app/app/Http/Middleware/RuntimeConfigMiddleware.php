@@ -29,6 +29,9 @@ class RuntimeConfigMiddleware
                     if (isset($config['logDestination'])) {
                         Config::set('haoc-otel.log_destination', $config['logDestination']);
                     }
+                    if (isset($config['logPayloadMode'])) {
+                        Config::set('haoc-otel.log_payload_mode', $config['logPayloadMode']);
+                    }
                 }
             }
         }
@@ -48,14 +51,15 @@ class RuntimeConfigMiddleware
     public static function current(): array
     {
         $defaults = [
-            'profile'         => env('HAOC_OTEL_PROFILE', 'minimal'),
-            'captureBody'     => env('HAOC_OTEL_CAPTURE_BODY') !== null
-                                    ? filter_var(env('HAOC_OTEL_CAPTURE_BODY'), FILTER_VALIDATE_BOOLEAN)
+            'profile'         => env('OTEL_PROFILE', 'minimal'),
+            'captureBody'     => env('OTEL_CAPTURE_BODY') !== null
+                                    ? filter_var(env('OTEL_CAPTURE_BODY'), FILTER_VALIDATE_BOOLEAN)
                                     : null,
-            'captureResponse' => env('HAOC_OTEL_CAPTURE_RESPONSE') !== null
-                                    ? filter_var(env('HAOC_OTEL_CAPTURE_RESPONSE'), FILTER_VALIDATE_BOOLEAN)
+            'captureResponse' => env('OTEL_CAPTURE_RESPONSE') !== null
+                                    ? filter_var(env('OTEL_CAPTURE_RESPONSE'), FILTER_VALIDATE_BOOLEAN)
                                     : null,
             'logDestination'  => env('LOG_DESTINATION', 'both'),
+            'logPayloadMode'  => env('OTEL_LOG_PAYLOAD_MODE', null),
         ];
 
         if (!file_exists(self::$configPath)) {

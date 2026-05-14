@@ -11,9 +11,9 @@ services:
       OTEL_SERVICE_NAME: playground-nestjs
       OTEL_ENVIRONMENT: playground
       NODE_ENV: development
-      HAOC_OTEL_PROFILE: ${HAOC_OTEL_PROFILE:-standard}
-      HAOC_OTEL_CAPTURE_BODY: ${HAOC_OTEL_CAPTURE_BODY:-}
-      HAOC_OTEL_CAPTURE_RESPONSE: ${HAOC_OTEL_CAPTURE_RESPONSE:-}
+      OTEL_PROFILE: ${OTEL_PROFILE:-standard}
+      OTEL_CAPTURE_BODY: ${OTEL_CAPTURE_BODY:-}
+      OTEL_CAPTURE_RESPONSE: ${OTEL_CAPTURE_RESPONSE:-}
       LOG_DESTINATION: ${LOG_DESTINATION:-both}
     volumes:
       - ./nestjs-app/src:/app/src
@@ -34,9 +34,9 @@ services:
       OTEL_SERVICE_NAME: playground-express
       OTEL_ENVIRONMENT: playground
       NODE_ENV: development
-      HAOC_OTEL_PROFILE: ${HAOC_OTEL_PROFILE:-standard}
-      HAOC_OTEL_CAPTURE_BODY: ${HAOC_OTEL_CAPTURE_BODY:-}
-      HAOC_OTEL_CAPTURE_RESPONSE: ${HAOC_OTEL_CAPTURE_RESPONSE:-}
+      OTEL_PROFILE: ${OTEL_PROFILE:-standard}
+      OTEL_CAPTURE_BODY: ${OTEL_CAPTURE_BODY:-}
+      OTEL_CAPTURE_RESPONSE: ${OTEL_CAPTURE_RESPONSE:-}
       LOG_DESTINATION: ${LOG_DESTINATION:-both}
     volumes:
       - ./express-app/src:/app/src
@@ -58,10 +58,15 @@ services:
       APP_KEY: base64:c2VjdXJlLXBsYXlncm91bmQta2V5LTEyMzQ1Njc4OTA=
       APP_ENV: local
       APP_DEBUG: "true"
-      HAOC_OTEL_PROFILE: ${HAOC_OTEL_PROFILE:-standard}
-      HAOC_OTEL_CAPTURE_BODY: ${HAOC_OTEL_CAPTURE_BODY:-}
-      HAOC_OTEL_CAPTURE_RESPONSE: ${HAOC_OTEL_CAPTURE_RESPONSE:-}
+      OTEL_PROFILE: ${OTEL_PROFILE:-standard}
+      OTEL_CAPTURE_BODY: ${OTEL_CAPTURE_BODY:-}
+      OTEL_CAPTURE_RESPONSE: ${OTEL_CAPTURE_RESPONSE:-}
       LOG_DESTINATION: ${LOG_DESTINATION:-both}
+    volumes:
+      # Hot-reload: monta a lib diretamente sobre o symlink do Composer.
+      # Mudanças em packages/laravel/src/** refletem na próxima requisição
+      # sem precisar rebuildar ou restartar o container.
+      - ../packages/laravel:/packages/laravel
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

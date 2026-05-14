@@ -25,7 +25,7 @@ import { AppModule } from './app.module';
 bootstrapHaocApp(AppModule, {
   serviceName: 'minha-api',
   port: 3000,
-  profile: 'standard',          // ou via HAOC_OTEL_PROFILE env var
+  profile: 'standard',          // ou via OTEL_PROFILE env var
   logDestination: 'both',       // 'console' | 'signoz' | 'both' | 'none'
   extraSensitiveFields: ['cpf', 'rg'],  // merge com os defaults
 });`" />
@@ -98,7 +98,7 @@ app.listen(3000);`" />
       OTEL_EXPORTER_OTLP_ENDPOINT: http://host.docker.internal:4318
       OTEL_SERVICE_NAME: minha-api
       OTEL_ENVIRONMENT: production
-      HAOC_OTEL_PROFILE: standard
+      OTEL_PROFILE: standard
       LOG_DESTINATION: both
     extra_hosts:
       - 'host.docker.internal:host-gateway'

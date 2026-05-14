@@ -53,7 +53,7 @@ Route::get('/admin/config', function () {
 });
 
 Route::put('/admin/config', function () {
-    $body = request()->only(['profile', 'captureBody', 'captureResponse', 'logDestination']);
+    $body = request()->only(['profile', 'captureBody', 'captureResponse', 'logDestination', 'logPayloadMode']);
     $current = RuntimeConfigMiddleware::current();
     $merged = array_merge($current, array_filter($body, fn($v) => $v !== null));
 
