@@ -1,4 +1,4 @@
-import { Context, propagation } from '@opentelemetry/api';
+import { Context } from '@opentelemetry/api';
 import { SpanProcessor, ReadableSpan, Span } from '@opentelemetry/sdk-trace-base';
 import { getUser, USER_ATTR, USER_TYPE_ATTR, USER_ROLE_ATTR } from './identity';
 import type { BrowserInfo } from './browser';
@@ -43,6 +43,16 @@ let _currentRoutePath = '';
 export function setCurrentRoute(routeName: string, routePath: string): void {
   _currentRouteName = routeName;
   _currentRoutePath = routePath;
+}
+
+/** Returns the current route name (e.g. "schedule"). */
+export function getCurrentRouteName(): string {
+  return _currentRouteName;
+}
+
+/** Returns the current route path (e.g. "/agenda/:id"). */
+export function getCurrentRoutePath(): string {
+  return _currentRoutePath;
 }
 
 /**
@@ -143,26 +153,6 @@ export class HaocSpanProcessor implements SpanProcessor {
     } else {
       span.setAttribute(USER_TYPE_ATTR, 'anonymous');
     }
-
-    // ── Baggage Propagation ─────────────────────────────────────────
-    // Set baggage entries so backends can read client context
-    let baggage = propagation.getBaggage(parentContext) ?? propagation.createBaggage();
-    if (_currentRoutePath) {
-      baggage = baggage.setEntry('page.route', { value: _currentRouteName || _currentRoutePath });
-    }
-    if (typeof location !== 'undefined') {
-      baggage = baggage.setEntry('page.url', { value: location.pathname });
-    }
-    baggage = baggage.setEntry('device.type', { value: this.browserInfo['device.type'] });
-    baggage = baggage.setEntry('browser.name', { value: this.browserInfo['browser.name'] });
-    baggage = baggage.setEntry('app.platform', { value: this.browserInfo['app.platform'] });
-
-    if (user) {
-      baggage = baggage.setEntry('user.id', { value: user.id });
-    }
-
-    // Store baggage in context for downstream propagation
-    propagation.setBaggage(parentContext, baggage);
 
     this.inner.onStart(span, parentContext);
   }

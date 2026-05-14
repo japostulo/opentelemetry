@@ -27,6 +27,7 @@ import {
   ATTR_LOG_EVENT,
   ATTR_LOG_TITLE,
   ATTR_REQUEST_JSON,
+  ATTR_RESPONSE_JSON,
   ATTR_ERROR_JSON,
   LOG_EVENT_REQUEST,
   LOG_EVENT_RESPONSE,
@@ -188,10 +189,11 @@ export class OtelInterceptor implements NestInterceptor {
       if (rawQuery) flattenToRecord(reqAttrs, 'request.query', rawQuery, 0, this.sensitiveFields);
       if (rawParams) flattenToRecord(reqAttrs, 'request.params', rawParams, 0, this.sensitiveFields);
 
+      let requestJson: string | undefined;
       if (logBody && inputPayload) {
         if (logPayloadMode === 'json-attr') {
-          const json = sanitizeToJsonAttr(inputPayload, { sensitiveFields: this.sensitiveFields, maxBytes: 16 * 1024 });
-          if (json) reqAttrs[ATTR_REQUEST_JSON] = json;
+          requestJson = sanitizeToJsonAttr(inputPayload, { sensitiveFields: this.sensitiveFields, maxBytes: 16 * 1024 }) ?? undefined;
+          if (requestJson) reqAttrs[ATTR_REQUEST_JSON] = requestJson;
         } else if (logPayloadMode === 'flatten') {
           flattenToRecord(reqAttrs, 'body', inputPayload, 0, this.sensitiveFields);
         }
@@ -208,6 +210,7 @@ export class OtelInterceptor implements NestInterceptor {
           [ATTR_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
           [ATTR_LOG_TITLE]: `${method} ${route} [${traceId}]`,
           [ATTR_OTEL_PROFILE]: runtime.profile,
+          ...(requestJson ? { [ATTR_REQUEST_JSON]: requestJson } : {}),
           ...userAttrs,
         },
       );
@@ -247,6 +250,12 @@ export class OtelInterceptor implements NestInterceptor {
           flattenToRecord(resAttrs, 'response.body', responseBody, 0, this.sensitiveFields);
         }
 
+        let responseJson: string | undefined;
+        if (logResponse && responseBody !== undefined && !isStreamResponse && logPayloadMode === 'json-attr') {
+          responseJson = sanitizeToJsonAttr(responseBody, { sensitiveFields: this.sensitiveFields, maxBytes: 16 * 1024 }) ?? undefined;
+          if (responseJson) resAttrs[ATTR_RESPONSE_JSON] = responseJson;
+        }
+
         // Prefer AsyncLocalStorage; fall back to per-trace map when
         // identifyUser() was called inside the handler (Forma 2) and the
         // RxJS Observable subscription runs in a different async context.
@@ -277,6 +286,7 @@ export class OtelInterceptor implements NestInterceptor {
             [ATTR_LOG_EVENT]: LOG_EVENT_RESPONSE,
             [ATTR_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
             [ATTR_OTEL_PROFILE]: runtime.profile,
+            ...(responseJson ? { [ATTR_RESPONSE_JSON]: responseJson } : {}),
             ...userAttrsOnRes,
           },
         );

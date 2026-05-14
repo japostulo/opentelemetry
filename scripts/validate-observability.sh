@@ -66,21 +66,21 @@ assert_trace() {
   assert_eq "distinct services on trace" 3 "${svc_count:-0}"
 
   local profile_rows
-  profile_rows=$(ch "SELECT DISTINCT resource_string_service\$\$name AS service, attributes_string['haoc.otel.profile'] AS profile FROM signoz_traces.signoz_index_v3 WHERE trace_id='$tid' AND has(mapKeys(attributes_string), 'haoc.otel.profile') ORDER BY service FORMAT TabSeparated")
+  profile_rows=$(ch "SELECT DISTINCT resource_string_service\$\$name AS service, attributes_string['otel.profile'] AS profile FROM signoz_traces.signoz_index_v3 WHERE trace_id='$tid' AND has(mapKeys(attributes_string), 'otel.profile') ORDER BY service FORMAT TabSeparated")
   echo "    [span profile per service (server-spans only)]"
   echo "$profile_rows" | sed 's/^/      /'
   local tagged_svcs
   tagged_svcs=$(echo "$profile_rows" | awk 'NF>=2 {print $1}' | sort -u | wc -l | tr -d ' ')
-  assert_eq "services with haoc.otel.profile-tagged spans" 3 "$tagged_svcs"
+  assert_eq "services with otel.profile-tagged spans" 3 "$tagged_svcs"
   local mismatched
   mismatched=$(echo "$profile_rows" | awk -v want="$exp_profile" 'NF>=2 && $2 != want { print $1"="$2 }' | tr '\n' ' ')
-  if [[ -z "$mismatched" ]]; then ok "every tagged span has haoc.otel.profile=$exp_profile"; else bad "wrong span profile on: $mismatched (expected $exp_profile)"; fi
+  if [[ -z "$mismatched" ]]; then ok "every tagged span has otel.profile=$exp_profile"; else bad "wrong span profile on: $mismatched (expected $exp_profile)"; fi
 
   local body_attr resp_attr
-  body_attr=$(ch "SELECT count() FROM signoz_traces.signoz_index_v3 WHERE trace_id='$tid' AND arrayExists(k -> startsWith(k, 'haoc.request.body.'), mapKeys(attributes_string))")
-  if [[ "$exp_body" == "yes" ]]; then assert_ge "spans w/ haoc.request.body.* attrs" 1 "${body_attr:-0}"; else assert_eq "spans w/ haoc.request.body.* attrs" 0 "${body_attr:-0}"; fi
-  resp_attr=$(ch "SELECT count() FROM signoz_traces.signoz_index_v3 WHERE trace_id='$tid' AND arrayExists(k -> startsWith(k, 'haoc.response.body.'), mapKeys(attributes_string))")
-  if [[ "$exp_resp" == "yes" ]]; then assert_ge "spans w/ haoc.response.body.* attrs" 1 "${resp_attr:-0}"; else assert_eq "spans w/ haoc.response.body.* attrs" 0 "${resp_attr:-0}"; fi
+  body_attr=$(ch "SELECT count() FROM signoz_traces.signoz_index_v3 WHERE trace_id='$tid' AND arrayExists(k -> startsWith(k, 'body.'), mapKeys(attributes_string))")
+  if [[ "$exp_body" == "yes" ]]; then assert_ge "spans w/ body.* attrs" 1 "${body_attr:-0}"; else assert_eq "spans w/ body.* attrs" 0 "${body_attr:-0}"; fi
+  resp_attr=$(ch "SELECT count() FROM signoz_traces.signoz_index_v3 WHERE trace_id='$tid' AND arrayExists(k -> startsWith(k, 'response.body.'), mapKeys(attributes_string))")
+  if [[ "$exp_resp" == "yes" ]]; then assert_ge "spans w/ response.body.* attrs" 1 "${resp_attr:-0}"; else assert_eq "spans w/ response.body.* attrs" 0 "${resp_attr:-0}"; fi
 
   local log_cnt
   log_cnt=$(ch "SELECT count() FROM signoz_logs.distributed_logs_v2 WHERE trace_id='$tid'")
@@ -89,13 +89,14 @@ assert_trace() {
     local got_log_svcs
     got_log_svcs=$(ch "SELECT DISTINCT resources_string['service.name'] FROM signoz_logs.distributed_logs_v2 WHERE trace_id='$tid' ORDER BY 1 FORMAT TabSeparated" | tr '\n' ',' | sed 's/,$//')
     assert_eq "log services on trace" "$exp_log_svcs" "$got_log_svcs"
+    # Only check otel.profile on http-event logs (app logs don't carry this attr)
     local log_profile_rows
-    log_profile_rows=$(ch "SELECT DISTINCT resources_string['service.name'] AS service, attributes_string['haoc.otel.profile'] AS profile FROM signoz_logs.distributed_logs_v2 WHERE trace_id='$tid' ORDER BY service FORMAT TabSeparated")
-    echo "    [log profile per service]"
+    log_profile_rows=$(ch "SELECT DISTINCT resources_string['service.name'] AS service, attributes_string['otel.profile'] AS profile FROM signoz_logs.distributed_logs_v2 WHERE trace_id='$tid' AND attributes_string['log.event'] != '' ORDER BY service FORMAT TabSeparated")
+    echo "    [log profile per service (http events)]"
     echo "$log_profile_rows" | sed 's/^/      /'
     local log_mismatched
     log_mismatched=$(echo "$log_profile_rows" | awk -v want="$exp_profile" '$2 != want { print $1"="$2 }' | tr '\n' ' ')
-    if [[ -z "$log_mismatched" ]]; then ok "every log has haoc.otel.profile=$exp_profile"; else bad "wrong log profile on: $log_mismatched (expected $exp_profile)"; fi
+    if [[ -z "$log_mismatched" ]]; then ok "every http-event log has otel.profile=$exp_profile"; else bad "wrong log profile on: $log_mismatched (expected $exp_profile)"; fi
   fi
 }
 
@@ -124,11 +125,13 @@ echo "============================================================"
 echo "  @haocruz/opentelemetry e2e SigNoz validation"
 echo "============================================================"
 
-run_scenario "A1 minimal-both"          "minimal"  "false" "false" "both"    6 "playground-express,playground-laravel,playground-nestjs" "no"  "no"
-run_scenario "A2 standard-both"         "standard" "true"  "true"  "both"    6 "playground-express,playground-laravel,playground-nestjs" "no"  "yes"
-run_scenario "A3 verbose-both"          "verbose"  "true"  "true"  "both"    6 "playground-express,playground-laravel,playground-nestjs" "no"  "yes"
-run_scenario "A4 back-to-minimal"       "minimal"  "false" "false" "both"    6 "playground-express,playground-laravel,playground-nestjs" "no"  "no"
-run_scenario "B1 standard-signoz-only"  "standard" "true"  "true"  "signoz"  6 "playground-express,playground-laravel,playground-nestjs" "no"  "yes"
+# 11 logs per /chain call: NestJS (4: request + 2 app logs + response),
+# Express (4: request + 2 app logs + response), Laravel (3: request + 1 app log + response)
+run_scenario "A1 minimal-both"          "minimal"  "false" "false" "both"    11 "playground-express,playground-laravel,playground-nestjs" "no"  "no"
+run_scenario "A2 standard-both"         "standard" "true"  "true"  "both"    11 "playground-express,playground-laravel,playground-nestjs" "no"  "yes"
+run_scenario "A3 verbose-both"          "verbose"  "true"  "true"  "both"    11 "playground-express,playground-laravel,playground-nestjs" "no"  "yes"
+run_scenario "A4 back-to-minimal"       "minimal"  "false" "false" "both"    11 "playground-express,playground-laravel,playground-nestjs" "no"  "no"
+run_scenario "B1 standard-signoz-only"  "standard" "true"  "true"  "signoz"  11 "playground-express,playground-laravel,playground-nestjs" "no"  "yes"
 run_scenario "B2 standard-console-only" "standard" "true"  "true"  "console" 0 "" "no"  "yes"
 run_scenario "B3 minimal-none"          "minimal"  "false" "false" "none"    0 "" "no"  "no"
 
@@ -143,16 +146,19 @@ TID_POST=$(echo "$post_resp" | grep -i '^x-trace-id:' | tr -d '\r' | awk '{print
 if [[ -z "$TID_POST" ]]; then bad "no trace_id from POST /echo"; else
   ok "captured trace_id=$TID_POST"
   sleep "$FLUSH_WAIT"
-  body_name=$(ch "SELECT attributes_string['haoc.request.body.name']     FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND attributes_string['haoc.request.body.name']     != '' LIMIT 1")
-  body_em=$(ch   "SELECT attributes_string['haoc.request.body.email']    FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND attributes_string['haoc.request.body.email']    != '' LIMIT 1")
-  body_cpf=$(ch  "SELECT attributes_string['haoc.request.body.cpf']      FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND attributes_string['haoc.request.body.cpf']      != '' LIMIT 1")
-  body_pwd=$(ch  "SELECT attributes_string['haoc.request.body.password'] FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND attributes_string['haoc.request.body.password'] != '' LIMIT 1")
+  body_name=$(ch "SELECT attributes_string['body.name']     FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND attributes_string['body.name']     != '' LIMIT 1")
+  body_em=$(ch   "SELECT attributes_string['body.email']    FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND attributes_string['body.email']    != '' LIMIT 1")
+  body_cpf=$(ch  "SELECT attributes_string['body.cpf']      FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND attributes_string['body.cpf']      != '' LIMIT 1")
+  body_pwd=$(ch  "SELECT attributes_string['body.password'] FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND attributes_string['body.password'] != '' LIMIT 1")
   assert_eq "body.name (clear)"      "João"       "${body_name:-}"
   assert_eq "body.email (clear)"     "x@y.com"    "${body_em:-}"
   assert_eq "body.cpf (redacted)"    "[REDACTED]" "${body_cpf:-}"
   assert_eq "body.password (redact)" "[REDACTED]" "${body_pwd:-}"
-  post_profile=$(ch "SELECT DISTINCT attributes_string['haoc.otel.profile'] FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND has(mapKeys(attributes_string), 'haoc.otel.profile') LIMIT 1 FORMAT TabSeparated")
-  assert_eq "POST span haoc.otel.profile" "standard" "$post_profile"
+  post_profile=$(ch "SELECT DISTINCT attributes_string['otel.profile'] FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND has(mapKeys(attributes_string), 'otel.profile') LIMIT 1 FORMAT TabSeparated")
+  assert_eq "POST span otel.profile" "standard" "$post_profile"
+  # Verify response body is also captured in standard profile
+  resp_body_cnt=$(ch "SELECT count() FROM signoz_traces.signoz_index_v3 WHERE trace_id='$TID_POST' AND arrayExists(k -> startsWith(k, 'response.body.'), mapKeys(attributes_string))")
+  assert_ge "POST spans w/ response.body.* attrs" 1 "${resp_body_cnt:-0}"
 fi
 
 echo

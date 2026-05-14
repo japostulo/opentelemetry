@@ -114,10 +114,13 @@ const PROFILES: Record<OtelProfileName, ResolvedProfile> = {
     ignoreIncomingPaths: [...DEFAULT_IGNORE_INCOMING],
     ignoreOutgoingUrls: [],
     ignoreRoutes: [],
-    expressIgnoreLayers: ['middleware'],
-    // standard does NOT flatten body into span attrs — use json-attr in logs
-    captureRequestBody: false,
-    captureResponseBody: false,
+    // Drop middleware, router and request_handler spans — same as minimal.
+    // These layer spans add noise without actionable value in standard traces.
+    // Only nestjs.handler and HTTP server/client spans are kept.
+    expressIgnoreLayers: ['middleware', 'router', 'request_handler'],
+    // Flatten body into span attrs so the trace is self-contained.
+    captureRequestBody: true,
+    captureResponseBody: true,
     logRequestBody: true,
     logResponseBody: true,
     logPayloadMode: 'json-attr' as PayloadMode,

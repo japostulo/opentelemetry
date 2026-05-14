@@ -25,6 +25,7 @@ import {
   ATTR_LOG_EVENT,
   ATTR_LOG_TITLE,
   ATTR_REQUEST_JSON,
+  ATTR_RESPONSE_JSON,
   LOG_EVENT_REQUEST,
   LOG_EVENT_RESPONSE,
   LOG_EVENT_ERROR,
@@ -178,10 +179,11 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
       if (rawQuery) flattenToRecord(reqAttrs, 'request.query', rawQuery, 0, sensitiveFields);
       if (rawParams) flattenToRecord(reqAttrs, 'request.params', rawParams, 0, sensitiveFields);
 
+      let requestJson: string | undefined;
       if (logBody && inputPayload) {
         if (logPayloadMode === 'json-attr') {
-          const json = sanitizeToJsonAttr(inputPayload, { sensitiveFields, maxBytes: 16 * 1024 });
-          if (json) reqAttrs[ATTR_REQUEST_JSON] = json;
+          requestJson = sanitizeToJsonAttr(inputPayload, { sensitiveFields, maxBytes: 16 * 1024 }) ?? undefined;
+          if (requestJson) reqAttrs[ATTR_REQUEST_JSON] = requestJson;
         } else if (logPayloadMode === 'flatten') {
           flattenToRecord(reqAttrs, 'body', inputPayload, 0, sensitiveFields);
         }
@@ -199,6 +201,7 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
           [ATTR_LOG_EVENT]: preflight.isPreflight ? LOG_EVENT_PREFLIGHT : LOG_EVENT_REQUEST,
           [ATTR_LOG_TITLE]: `${method} ${route} [${traceId}]`,
           [ATTR_OTEL_PROFILE]: runtime.profile,
+          ...(requestJson ? { [ATTR_REQUEST_JSON]: requestJson } : {}),
           ...userAttrs,
         },
       );
@@ -285,6 +288,12 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
           flattenToRecord(resAttrs, 'response.body', parsedResponseBody, 0, sensitiveFields);
         }
 
+        let responseJson: string | undefined;
+        if (logResponse && parsedResponseBody !== undefined && logPayloadMode === 'json-attr') {
+          responseJson = sanitizeToJsonAttr(parsedResponseBody, { sensitiveFields, maxBytes: 16 * 1024 }) ?? undefined;
+          if (responseJson) resAttrs[ATTR_RESPONSE_JSON] = responseJson;
+        }
+
         const logLevel = statusCode >= 400 ? 'error' : 'info';
         const logger = (req as unknown as { log?: { info: Function; error: Function } }).log;
         if (statusCode >= 400) {
@@ -306,6 +315,7 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
             [ATTR_LOG_EVENT]: statusCode >= 400 ? LOG_EVENT_ERROR : LOG_EVENT_RESPONSE,
             [ATTR_LOG_TITLE]: `${method} ${route} ${statusCode} ${duration}ms [${traceId}]`,
             [ATTR_OTEL_PROFILE]: runtime.profile,
+            ...(responseJson ? { [ATTR_RESPONSE_JSON]: responseJson } : {}),
             ...userAttrsOnClose,
           },
         );

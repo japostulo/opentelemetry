@@ -16,10 +16,11 @@ import { XMLHttpRequestInstrumentation } from '@opentelemetry/instrumentation-xm
 import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
 import { DocumentLoadInstrumentation } from '@opentelemetry/instrumentation-document-load';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
-import { CompositePropagator, W3CBaggagePropagator } from '@opentelemetry/core';
+import { CompositePropagator } from '@opentelemetry/core';
 
 import { detectBrowserInfo, type AppPlatform } from './browser';
 import { HaocSpanProcessor } from './processor';
+import { HaocEnrichedBaggagePropagator } from './haoc-baggage-propagator';
 import { installErrorHandlers } from './errors';
 import {
   matchesAny,
@@ -239,7 +240,7 @@ export function initTracing(config: OtelWebConfig): WebTracerProvider {
     propagator: new CompositePropagator({
       propagators: [
         new W3CTraceContextPropagator(),
-        new W3CBaggagePropagator(),
+        new HaocEnrichedBaggagePropagator(browserInfo),
       ],
     }),
   });
