@@ -9,40 +9,40 @@ describe('flattenToRecord', () => {
     const record = {} as Record<string, unknown>;
     flattenToRecord(
       record,
-      'haoc.request.body',
+      'request.body',
       { user: { name: 'João', email: 'joao@example.com' }, order: { id: 'abc-123', amount: 99.9 } },
     );
-    expect(record['haoc.request.body.user.name']).toBe('João');
-    expect(record['haoc.request.body.user.email']).toBe('joao@example.com');
-    expect(record['haoc.request.body.order.id']).toBe('abc-123');
-    expect(record['haoc.request.body.order.amount']).toBe(99.9);
+    expect(record['request.body.user.name']).toBe('João');
+    expect(record['request.body.user.email']).toBe('joao@example.com');
+    expect(record['request.body.order.id']).toBe('abc-123');
+    expect(record['request.body.order.amount']).toBe(99.9);
   });
 
   it('preserves number type (does not stringify)', () => {
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.body', { count: 42, ratio: 0.5 });
-    expect(typeof record['haoc.request.body.count']).toBe('number');
-    expect(record['haoc.request.body.count']).toBe(42);
-    expect(record['haoc.request.body.ratio']).toBe(0.5);
+    flattenToRecord(record, 'request.body', { count: 42, ratio: 0.5 });
+    expect(typeof record['request.body.count']).toBe('number');
+    expect(record['request.body.count']).toBe(42);
+    expect(record['request.body.ratio']).toBe(0.5);
   });
 
   it('preserves boolean type', () => {
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.body', { active: true, deleted: false });
-    expect(typeof record['haoc.request.body.active']).toBe('boolean');
-    expect(record['haoc.request.body.active']).toBe(true);
-    expect(record['haoc.request.body.deleted']).toBe(false);
+    flattenToRecord(record, 'request.body', { active: true, deleted: false });
+    expect(typeof record['request.body.active']).toBe('boolean');
+    expect(record['request.body.active']).toBe(true);
+    expect(record['request.body.deleted']).toBe(false);
   });
 
   it('redacts sensitive fields from DEFAULT_SENSITIVE_FIELDS', () => {
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.body', {
+    flattenToRecord(record, 'request.body', {
       user: { name: 'João', cpf: '12345678900' },
       password: 'S3cret!',
     });
-    expect(record['haoc.request.body.user.name']).toBe('João');
-    expect(record['haoc.request.body.user.cpf']).toBe('[REDACTED]');
-    expect(record['haoc.request.body.password']).toBe('[REDACTED]');
+    expect(record['request.body.user.name']).toBe('João');
+    expect(record['request.body.user.cpf']).toBe('[REDACTED]');
+    expect(record['request.body.password']).toBe('[REDACTED]');
   });
 
   it('redacts all default sensitive field names', () => {
@@ -61,32 +61,32 @@ describe('flattenToRecord', () => {
       cns: 'cns',
     };
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.body', sensitivePayload, 0, DEFAULT_SENSITIVE_FIELDS);
+    flattenToRecord(record, 'request.body', sensitivePayload, 0, DEFAULT_SENSITIVE_FIELDS);
     for (const key of Object.keys(sensitivePayload)) {
-      expect(record[`haoc.request.body.${key}`], `${key} should be redacted`).toBe('[REDACTED]');
+      expect(record[`request.body.${key}`], `${key} should be redacted`).toBe('[REDACTED]');
     }
   });
 
   it('serializes arrays as JSON string (not recursed)', () => {
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.body', { items: ['a', 'b', 'c'] });
-    expect(typeof record['haoc.request.body.items']).toBe('string');
-    expect(JSON.parse(record['haoc.request.body.items'] as string)).toEqual(['a', 'b', 'c']);
+    flattenToRecord(record, 'request.body', { items: ['a', 'b', 'c'] });
+    expect(typeof record['request.body.items']).toBe('string');
+    expect(JSON.parse(record['request.body.items'] as string)).toEqual(['a', 'b', 'c']);
   });
 
   it('skips null and undefined values', () => {
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.body', { a: null, b: undefined, c: 'valid' });
-    expect('haoc.request.body.a' in record).toBe(false);
-    expect('haoc.request.body.b' in record).toBe(false);
-    expect(record['haoc.request.body.c']).toBe('valid');
+    flattenToRecord(record, 'request.body', { a: null, b: undefined, c: 'valid' });
+    expect('request.body.a' in record).toBe(false);
+    expect('request.body.b' in record).toBe(false);
+    expect(record['request.body.c']).toBe('valid');
   });
 
   it('expands JSON-string values recursively', () => {
     const record = {} as Record<string, unknown>;
     const inner = JSON.stringify({ nested: 'value' });
-    flattenToRecord(record, 'haoc.request.body', { data: inner });
-    expect(record['haoc.request.body.data.nested']).toBe('value');
+    flattenToRecord(record, 'request.body', { data: inner });
+    expect(record['request.body.data.nested']).toBe('value');
   });
 
   it('respects MAX_FLATTEN_DEPTH (stops at depth 4)', () => {
@@ -109,35 +109,35 @@ describe('flattenToRecord', () => {
   it('supports custom sensitive fields set', () => {
     const custom = new Set(['customsecret']);
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.body', { customsecret: 'oops', safe: 'ok' }, 0, custom);
-    expect(record['haoc.request.body.customsecret']).toBe('[REDACTED]');
-    expect(record['haoc.request.body.safe']).toBe('ok');
+    flattenToRecord(record, 'request.body', { customsecret: 'oops', safe: 'ok' }, 0, custom);
+    expect(record['request.body.customsecret']).toBe('[REDACTED]');
+    expect(record['request.body.safe']).toBe('ok');
   });
 
   it('handles top-level non-object primitive', () => {
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.body', 42 as unknown);
-    expect(record['haoc.request.body']).toBe(42);
+    flattenToRecord(record, 'request.body', 42 as unknown);
+    expect(record['request.body']).toBe(42);
   });
 
   it('handles top-level array', () => {
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.body', [1, 2, 3] as unknown);
-    expect(typeof record['haoc.request.body']).toBe('string');
+    flattenToRecord(record, 'request.body', [1, 2, 3] as unknown);
+    expect(typeof record['request.body']).toBe('string');
   });
 
-  it('works with haoc.response.body prefix', () => {
+  it('works with response.body prefix', () => {
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.response.body', { status: 'ok', data: { id: 1 } });
-    expect(record['haoc.response.body.status']).toBe('ok');
-    expect(record['haoc.response.body.data.id']).toBe(1);
+    flattenToRecord(record, 'response.body', { status: 'ok', data: { id: 1 } });
+    expect(record['response.body.status']).toBe('ok');
+    expect(record['response.body.data.id']).toBe(1);
   });
 
-  it('works with haoc.request.query prefix', () => {
+  it('works with request.query prefix', () => {
     const record = {} as Record<string, unknown>;
-    flattenToRecord(record, 'haoc.request.query', { page: '1', size: '20', filter: 'active' });
-    expect(record['haoc.request.query.page']).toBe('1');
-    expect(record['haoc.request.query.size']).toBe('20');
+    flattenToRecord(record, 'request.query', { page: '1', size: '20', filter: 'active' });
+    expect(record['request.query.page']).toBe('1');
+    expect(record['request.query.size']).toBe('20');
   });
 });
 
@@ -157,45 +157,45 @@ describe('flattenToSpan', () => {
 
   it('sets string attribute on span', () => {
     const span = makeSpan() as unknown as import('@opentelemetry/api').Span;
-    flattenToSpan(span, 'haoc.request.body', { name: 'João' });
-    expect((span as ReturnType<typeof makeSpan>).getAttrs()['haoc.request.body.name']).toBe('João');
+    flattenToSpan(span, 'request.body', { name: 'João' });
+    expect((span as ReturnType<typeof makeSpan>).getAttrs()['request.body.name']).toBe('João');
   });
 
   it('sets number attribute on span (preserves type)', () => {
     const span = makeSpan() as unknown as import('@opentelemetry/api').Span;
-    flattenToSpan(span, 'haoc.request.body', { amount: 99.9 });
-    expect((span as ReturnType<typeof makeSpan>).getAttrs()['haoc.request.body.amount']).toBe(99.9);
-    expect(typeof (span as ReturnType<typeof makeSpan>).getAttrs()['haoc.request.body.amount']).toBe('number');
+    flattenToSpan(span, 'request.body', { amount: 99.9 });
+    expect((span as ReturnType<typeof makeSpan>).getAttrs()['request.body.amount']).toBe(99.9);
+    expect(typeof (span as ReturnType<typeof makeSpan>).getAttrs()['request.body.amount']).toBe('number');
   });
 
   it('sets boolean attribute on span (preserves type)', () => {
     const span = makeSpan() as unknown as import('@opentelemetry/api').Span;
-    flattenToSpan(span, 'haoc.request.body', { active: true });
-    expect((span as ReturnType<typeof makeSpan>).getAttrs()['haoc.request.body.active']).toBe(true);
-    expect(typeof (span as ReturnType<typeof makeSpan>).getAttrs()['haoc.request.body.active']).toBe('boolean');
+    flattenToSpan(span, 'request.body', { active: true });
+    expect((span as ReturnType<typeof makeSpan>).getAttrs()['request.body.active']).toBe(true);
+    expect(typeof (span as ReturnType<typeof makeSpan>).getAttrs()['request.body.active']).toBe('boolean');
   });
 
   it('redacts sensitive fields', () => {
     const span = makeSpan() as unknown as import('@opentelemetry/api').Span;
-    flattenToSpan(span, 'haoc.request.body', { user: { cpf: '12345678900', name: 'João' }, password: 'x' });
+    flattenToSpan(span, 'request.body', { user: { cpf: '12345678900', name: 'João' }, password: 'x' });
     const attrs = (span as ReturnType<typeof makeSpan>).getAttrs();
-    expect(attrs['haoc.request.body.user.cpf']).toBe('[REDACTED]');
-    expect(attrs['haoc.request.body.password']).toBe('[REDACTED]');
-    expect(attrs['haoc.request.body.user.name']).toBe('João');
+    expect(attrs['request.body.user.cpf']).toBe('[REDACTED]');
+    expect(attrs['request.body.password']).toBe('[REDACTED]');
+    expect(attrs['request.body.user.name']).toBe('João');
   });
 
   it('sets array as JSON string', () => {
     const span = makeSpan() as unknown as import('@opentelemetry/api').Span;
-    flattenToSpan(span, 'haoc.request.body', { tags: ['a', 'b'] });
-    const val = (span as ReturnType<typeof makeSpan>).getAttrs()['haoc.request.body.tags'];
+    flattenToSpan(span, 'request.body', { tags: ['a', 'b'] });
+    const val = (span as ReturnType<typeof makeSpan>).getAttrs()['request.body.tags'];
     expect(typeof val).toBe('string');
     expect(JSON.parse(val as string)).toEqual(['a', 'b']);
   });
 
   it('does nothing for null/undefined', () => {
     const span = makeSpan() as unknown as import('@opentelemetry/api').Span;
-    flattenToSpan(span, 'haoc.request.body', null);
-    flattenToSpan(span, 'haoc.request.body', undefined);
+    flattenToSpan(span, 'request.body', null);
+    flattenToSpan(span, 'request.body', undefined);
     expect(Object.keys((span as ReturnType<typeof makeSpan>).getAttrs())).toHaveLength(0);
   });
 });

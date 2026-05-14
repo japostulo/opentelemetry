@@ -96,18 +96,18 @@ describe('resolveWebProfile — named profiles', () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────
-// resolveWebProfile — env precedence (HAOC_OTEL_* and VITE_OTEL_*)
+// resolveWebProfile — env precedence (OTEL_* and VITE_OTEL_*)
 // ───────────────────────────────────────────────────────────────────────
 describe('resolveWebProfile — env-driven values', () => {
-  it('reads VITE_OTEL_PROFILE when HAOC_OTEL_PROFILE is absent', () => {
+  it('reads VITE_OTEL_PROFILE when OTEL_PROFILE is absent', () => {
     const p = resolveWebProfile({ env: { VITE_OTEL_PROFILE: 'verbose' } });
     expect(p.profile).toBe('verbose');
   });
 
-  it('HAOC_OTEL_PROFILE wins over VITE_OTEL_PROFILE', () => {
+  it('OTEL_PROFILE wins over VITE_OTEL_PROFILE', () => {
     const p = resolveWebProfile({
       env: {
-        HAOC_OTEL_PROFILE: 'standard',
+        OTEL_PROFILE: 'standard',
         VITE_OTEL_PROFILE: 'verbose',
       },
     });
@@ -117,67 +117,67 @@ describe('resolveWebProfile — env-driven values', () => {
   it('explicit profile overrides env', () => {
     const p = resolveWebProfile({
       profile: 'minimal',
-      env: { HAOC_OTEL_PROFILE: 'verbose' },
+      env: { OTEL_PROFILE: 'verbose' },
     });
     expect(p.profile).toBe('minimal');
   });
 
-  it('reads HAOC_OTEL_SAMPLE_RATIO and clamps invalid values', () => {
+  it('reads OTEL_SAMPLE_RATIO and clamps invalid values', () => {
     expect(
-      resolveWebProfile({ env: { HAOC_OTEL_SAMPLE_RATIO: '0.3' } })
+      resolveWebProfile({ env: { OTEL_SAMPLE_RATIO: '0.3' } })
         .sampleRatio,
     ).toBeCloseTo(0.3);
     expect(
-      resolveWebProfile({ env: { HAOC_OTEL_SAMPLE_RATIO: 'NaN' } })
+      resolveWebProfile({ env: { OTEL_SAMPLE_RATIO: 'NaN' } })
         .sampleRatio,
     ).toBe(1.0);
     expect(
-      resolveWebProfile({ env: { HAOC_OTEL_SAMPLE_RATIO: '5' } }).sampleRatio,
+      resolveWebProfile({ env: { OTEL_SAMPLE_RATIO: '5' } }).sampleRatio,
     ).toBe(1.0);
   });
 
-  it('reads HAOC_OTEL_IGNORE_URLS as CSV', () => {
+  it('reads OTEL_IGNORE_URLS as CSV', () => {
     // CSV split is on `,`, so individual patterns must not contain commas.
     const p = resolveWebProfile({
-      env: { HAOC_OTEL_IGNORE_URLS: 'socket\\.io|polling, ^https?://noise' },
+      env: { OTEL_IGNORE_URLS: 'socket\\.io|polling, ^https?://noise' },
     });
     expect(matchesAny(p.ignoreUrls, '/socket.io/poll')).toBe(true);
     expect(matchesAny(p.ignoreUrls, 'https://noise.example')).toBe(true);
   });
 
-  it('reads HAOC_OTEL_IGNORE_ERRORS as CSV', () => {
+  it('reads OTEL_IGNORE_ERRORS as CSV', () => {
     const p = resolveWebProfile({
-      env: { HAOC_OTEL_IGNORE_ERRORS: '^Custom error' },
+      env: { OTEL_IGNORE_ERRORS: '^Custom error' },
     });
     expect(matchesAny(p.ignoreErrorMessages, 'Custom error: x')).toBe(true);
     // Default noisy ones still apply (merged).
     expect(matchesAny(p.ignoreErrorMessages, 'Script error.')).toBe(true);
   });
 
-  it('reads HAOC_OTEL_DOCUMENT_LOAD bool toggles', () => {
+  it('reads OTEL_DOCUMENT_LOAD bool toggles', () => {
     expect(
-      resolveWebProfile({ env: { HAOC_OTEL_DOCUMENT_LOAD: 'true' } })
+      resolveWebProfile({ env: { OTEL_DOCUMENT_LOAD: 'true' } })
         .enableDocumentLoad,
     ).toBe(true);
     expect(
       resolveWebProfile({
         profile: 'verbose',
-        env: { HAOC_OTEL_DOCUMENT_LOAD: 'false' },
+        env: { OTEL_DOCUMENT_LOAD: 'false' },
       }).enableDocumentLoad,
     ).toBe(false);
   });
 
-  it('reads HAOC_OTEL_API_WHITELIST', () => {
+  it('reads OTEL_API_WHITELIST', () => {
     expect(
       resolveWebProfile({
         profile: 'verbose',
-        env: { HAOC_OTEL_API_WHITELIST: 'true' },
+        env: { OTEL_API_WHITELIST: 'true' },
       }).apiUrlsAsWhitelist,
     ).toBe(true);
     expect(
       resolveWebProfile({
         profile: 'minimal',
-        env: { HAOC_OTEL_API_WHITELIST: 'false' },
+        env: { OTEL_API_WHITELIST: 'false' },
       }).apiUrlsAsWhitelist,
     ).toBe(false);
   });
@@ -186,8 +186,8 @@ describe('resolveWebProfile — env-driven values', () => {
     const p = resolveWebProfile({
       profile: 'verbose',
       env: {
-        HAOC_OTEL_SAMPLE_RATIO: '0.1',
-        HAOC_OTEL_DOCUMENT_LOAD: 'false',
+        OTEL_SAMPLE_RATIO: '0.1',
+        OTEL_DOCUMENT_LOAD: 'false',
       },
       sampleRatio: 0.7,
       enableDocumentLoad: true,
@@ -202,7 +202,7 @@ describe('resolveWebProfile — env-driven values', () => {
 describe('resolveWebProfile — env merging', () => {
   it('merges base ignoreUrls with env + override (no double-counting)', () => {
     const p = resolveWebProfile({
-      env: { HAOC_OTEL_IGNORE_URLS: 'foo' },
+      env: { OTEL_IGNORE_URLS: 'foo' },
       ignoreUrls: ['bar'],
     });
     // Base has 1 (static asset), env adds 1, override adds 1.
@@ -213,14 +213,14 @@ describe('resolveWebProfile — env merging', () => {
   });
 
   it('falls back to globalThis.process.env when env is absent', () => {
-    const before = process.env.HAOC_OTEL_PROFILE;
-    process.env.HAOC_OTEL_PROFILE = 'verbose';
+    const before = process.env.OTEL_PROFILE;
+    process.env.OTEL_PROFILE = 'verbose';
     try {
       const p = resolveWebProfile();
       expect(p.profile).toBe('verbose');
     } finally {
-      if (before === undefined) delete process.env.HAOC_OTEL_PROFILE;
-      else process.env.HAOC_OTEL_PROFILE = before;
+      if (before === undefined) delete process.env.OTEL_PROFILE;
+      else process.env.OTEL_PROFILE = before;
     }
   });
 });

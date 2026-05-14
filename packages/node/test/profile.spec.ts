@@ -10,28 +10,28 @@ import {
 } from '../src/tracing/profile';
 
 const HAOC_KEYS = [
-  'HAOC_OTEL_PROFILE',
-  'HAOC_OTEL_SAMPLE_RATIO',
-  'HAOC_OTEL_IGNORE_URLS',
-  'HAOC_OTEL_IGNORE_OUTGOING_URLS',
-  'HAOC_OTEL_IGNORE_ROUTES',
-  'HAOC_OTEL_EXPRESS_IGNORE_LAYERS',
-  'HAOC_OTEL_CAPTURE_BODY',
-  'HAOC_OTEL_CAPTURE_RESPONSE',
-  'HAOC_OTEL_RESOLVED_PROFILE',
-  'HAOC_OTEL_TRACE_HTTP',
-  'HAOC_OTEL_TRACE_EXPRESS',
-  'HAOC_OTEL_TRACE_NESTJS',
-  'HAOC_OTEL_TRACE_PG',
-  'HAOC_OTEL_TRACE_MYSQL',
-  'HAOC_OTEL_TRACE_MYSQL2',
-  'HAOC_OTEL_TRACE_MONGODB',
-  'HAOC_OTEL_TRACE_IOREDIS',
-  'HAOC_OTEL_TRACE_REDIS',
-  'HAOC_OTEL_TRACE_PINO',
-  'HAOC_OTEL_TRACE_FS',
-  'HAOC_OTEL_TRACE_NET',
-  'HAOC_OTEL_TRACE_DNS',
+  'OTEL_PROFILE',
+  'OTEL_SAMPLE_RATIO',
+  'OTEL_IGNORE_URLS',
+  'OTEL_IGNORE_OUTGOING_URLS',
+  'OTEL_IGNORE_ROUTES',
+  'OTEL_EXPRESS_IGNORE_LAYERS',
+  'OTEL_CAPTURE_BODY',
+  'OTEL_CAPTURE_RESPONSE',
+  'OTEL_RESOLVED_PROFILE',
+  'OTEL_TRACE_HTTP',
+  'OTEL_TRACE_EXPRESS',
+  'OTEL_TRACE_NESTJS',
+  'OTEL_TRACE_PG',
+  'OTEL_TRACE_MYSQL',
+  'OTEL_TRACE_MYSQL2',
+  'OTEL_TRACE_MONGODB',
+  'OTEL_TRACE_IOREDIS',
+  'OTEL_TRACE_REDIS',
+  'OTEL_TRACE_PINO',
+  'OTEL_TRACE_FS',
+  'OTEL_TRACE_NET',
+  'OTEL_TRACE_DNS',
 ];
 
 let snapshot: Record<string, string | undefined>;
@@ -143,8 +143,9 @@ describe('resolveProfile — named profiles', () => {
   it('returns the standard profile shape', () => {
     const p = resolveProfile({ profile: 'standard', ignoreEnv: true });
     expect(p.profile).toBe('standard');
-    expect(p.captureRequestBody).toBe(true);
-    expect(p.captureResponseBody).toBe(true);
+    // standard does NOT flatten body into span attributes (Atividade 2 fix)
+    expect(p.captureRequestBody).toBe(false);
+    expect(p.captureResponseBody).toBe(false);
     expect(p.expressIgnoreLayers).toEqual(['middleware']);
     expect(p.instrumentations.mysql).toBe(true);
     // Static asset filter is OFF in standard.
@@ -187,14 +188,14 @@ describe('resolveProfile — sample ratio', () => {
     expect(p.sampleRatio).toBe(1.0);
   });
 
-  it('reads HAOC_OTEL_SAMPLE_RATIO from env', () => {
-    process.env.HAOC_OTEL_SAMPLE_RATIO = '0.42';
+  it('reads OTEL_SAMPLE_RATIO from env', () => {
+    process.env.OTEL_SAMPLE_RATIO = '0.42';
     const p = resolveProfile();
     expect(p.sampleRatio).toBeCloseTo(0.42);
   });
 
   it('explicit override beats env', () => {
-    process.env.HAOC_OTEL_SAMPLE_RATIO = '0.42';
+    process.env.OTEL_SAMPLE_RATIO = '0.42';
     const p = resolveProfile({ sampleRatio: 0.99 });
     expect(p.sampleRatio).toBeCloseTo(0.99);
   });
@@ -220,16 +221,16 @@ describe('resolveProfile — sample ratio', () => {
 
   it('does not auto-drop when an explicit ratio is provided', () => {
     process.env.NODE_ENV = 'production';
-    process.env.HAOC_OTEL_SAMPLE_RATIO = '0.5';
+    process.env.OTEL_SAMPLE_RATIO = '0.5';
     expect(resolveProfile().sampleRatio).toBeCloseTo(0.5);
   });
 
   it('rejects out-of-range or non-numeric env values', () => {
-    process.env.HAOC_OTEL_SAMPLE_RATIO = '5';
+    process.env.OTEL_SAMPLE_RATIO = '5';
     expect(resolveProfile().sampleRatio).toBe(1.0);
-    process.env.HAOC_OTEL_SAMPLE_RATIO = 'NaN';
+    process.env.OTEL_SAMPLE_RATIO = 'NaN';
     expect(resolveProfile().sampleRatio).toBe(1.0);
-    process.env.HAOC_OTEL_SAMPLE_RATIO = '-0.1';
+    process.env.OTEL_SAMPLE_RATIO = '-0.1';
     expect(resolveProfile().sampleRatio).toBe(1.0);
   });
 });
@@ -239,7 +240,7 @@ describe('resolveProfile — sample ratio', () => {
 // ───────────────────────────────────────────────────────────────────────
 describe('resolveProfile — ignore lists', () => {
   it('merges base + env + override for ignoreIncomingPaths', () => {
-    process.env.HAOC_OTEL_IGNORE_URLS = '^/from-env$';
+    process.env.OTEL_IGNORE_URLS = '^/from-env$';
     const p = resolveProfile({
       ignoreIncomingPaths: ['^/from-override$'],
     });
@@ -249,7 +250,7 @@ describe('resolveProfile — ignore lists', () => {
   });
 
   it('exposes ignoreOutgoingUrls from env + override', () => {
-    process.env.HAOC_OTEL_IGNORE_OUTGOING_URLS = 'tasy.haoc';
+    process.env.OTEL_IGNORE_OUTGOING_URLS = 'tasy.haoc';
     const p = resolveProfile({
       ignoreOutgoingUrls: [/internal\.svc/],
     });
@@ -258,7 +259,7 @@ describe('resolveProfile — ignore lists', () => {
   });
 
   it('exposes ignoreRoutes from env + override', () => {
-    process.env.HAOC_OTEL_IGNORE_ROUTES = '^/admin$';
+    process.env.OTEL_IGNORE_ROUTES = '^/admin$';
     const p = resolveProfile({ ignoreRoutes: [/^\/queue/] });
     expect(matchesAny(p.ignoreRoutes, '/admin')).toBe(true);
     expect(matchesAny(p.ignoreRoutes, '/queue/x')).toBe(true);
@@ -270,32 +271,32 @@ describe('resolveProfile — ignore lists', () => {
 // resolveProfile — body capture & express layers
 // ───────────────────────────────────────────────────────────────────────
 describe('resolveProfile — body capture toggles', () => {
-  it('reads HAOC_OTEL_CAPTURE_BODY (true/false/yes/no/1/0/on/off)', () => {
+  it('reads OTEL_CAPTURE_BODY (true/false/yes/no/1/0/on/off)', () => {
     for (const truthy of ['true', '1', 'yes', 'on']) {
-      process.env.HAOC_OTEL_CAPTURE_BODY = truthy;
+      process.env.OTEL_CAPTURE_BODY = truthy;
       expect(resolveProfile().captureRequestBody).toBe(true);
     }
     for (const falsy of ['false', '0', 'no', 'off']) {
-      process.env.HAOC_OTEL_CAPTURE_BODY = falsy;
+      process.env.OTEL_CAPTURE_BODY = falsy;
       expect(resolveProfile().captureRequestBody).toBe(false);
     }
   });
 
   it('explicit override beats env', () => {
-    process.env.HAOC_OTEL_CAPTURE_BODY = 'true';
+    process.env.OTEL_CAPTURE_BODY = 'true';
     expect(
       resolveProfile({ captureRequestBody: false }).captureRequestBody,
     ).toBe(false);
   });
 
   it('falls back to base default for invalid env values', () => {
-    process.env.HAOC_OTEL_CAPTURE_BODY = 'maybe';
+    process.env.OTEL_CAPTURE_BODY = 'maybe';
     // minimal default is false
     expect(resolveProfile().captureRequestBody).toBe(false);
   });
 
-  it('reads HAOC_OTEL_EXPRESS_IGNORE_LAYERS as CSV', () => {
-    process.env.HAOC_OTEL_EXPRESS_IGNORE_LAYERS =
+  it('reads OTEL_EXPRESS_IGNORE_LAYERS as CSV', () => {
+    process.env.OTEL_EXPRESS_IGNORE_LAYERS =
       'middleware, request_handler ,router';
     expect(resolveProfile().expressIgnoreLayers).toEqual([
       'middleware',
@@ -305,7 +306,7 @@ describe('resolveProfile — body capture toggles', () => {
   });
 
   it('explicit expressIgnoreLayers wins over env', () => {
-    process.env.HAOC_OTEL_EXPRESS_IGNORE_LAYERS = 'middleware,router';
+    process.env.OTEL_EXPRESS_IGNORE_LAYERS = 'middleware,router';
     expect(
       resolveProfile({ expressIgnoreLayers: [] }).expressIgnoreLayers,
     ).toEqual([]);
@@ -316,25 +317,25 @@ describe('resolveProfile — body capture toggles', () => {
 // resolveProfile — per-instrumentation env toggles
 // ───────────────────────────────────────────────────────────────────────
 describe('resolveProfile — per-instrumentation toggles', () => {
-  it('HAOC_OTEL_TRACE_FS=true enables fs in minimal', () => {
-    process.env.HAOC_OTEL_TRACE_FS = 'true';
+  it('OTEL_TRACE_FS=true enables fs in minimal', () => {
+    process.env.OTEL_TRACE_FS = 'true';
     expect(resolveProfile().instrumentations.fs).toBe(true);
   });
 
-  it('HAOC_OTEL_TRACE_HTTP=false disables http in minimal', () => {
-    process.env.HAOC_OTEL_TRACE_HTTP = 'false';
+  it('OTEL_TRACE_HTTP=false disables http in minimal', () => {
+    process.env.OTEL_TRACE_HTTP = 'false';
     expect(resolveProfile().instrumentations.http).toBe(false);
   });
 
   it('explicit instrumentations override env', () => {
-    process.env.HAOC_OTEL_TRACE_PG = 'false';
+    process.env.OTEL_TRACE_PG = 'false';
     expect(
       resolveProfile({ instrumentations: { pg: true } }).instrumentations.pg,
     ).toBe(true);
   });
 
   it('invalid bool env values are silently ignored (base wins)', () => {
-    process.env.HAOC_OTEL_TRACE_FS = 'sometimes';
+    process.env.OTEL_TRACE_FS = 'sometimes';
     expect(resolveProfile().instrumentations.fs).toBe(false);
   });
 });
@@ -343,20 +344,20 @@ describe('resolveProfile — per-instrumentation toggles', () => {
 // resolveProfile — profile name from env
 // ───────────────────────────────────────────────────────────────────────
 describe('resolveProfile — profile selection from env', () => {
-  it('reads HAOC_OTEL_PROFILE', () => {
-    process.env.HAOC_OTEL_PROFILE = 'verbose';
+  it('reads OTEL_PROFILE', () => {
+    process.env.OTEL_PROFILE = 'verbose';
     expect(resolveProfile().profile).toBe('verbose');
   });
 
   it('explicit profile arg beats env', () => {
-    process.env.HAOC_OTEL_PROFILE = 'verbose';
+    process.env.OTEL_PROFILE = 'verbose';
     expect(resolveProfile({ profile: 'minimal' }).profile).toBe('minimal');
   });
 
   it('ignoreEnv:true skips env vars entirely', () => {
-    process.env.HAOC_OTEL_PROFILE = 'verbose';
-    process.env.HAOC_OTEL_SAMPLE_RATIO = '0.1';
-    process.env.HAOC_OTEL_TRACE_FS = 'true';
+    process.env.OTEL_PROFILE = 'verbose';
+    process.env.OTEL_SAMPLE_RATIO = '0.1';
+    process.env.OTEL_TRACE_FS = 'true';
     const p = resolveProfile({ ignoreEnv: true });
     expect(p.profile).toBe('minimal');
     expect(p.sampleRatio).toBe(1.0);
@@ -376,8 +377,8 @@ describe('getRuntimeProfile', () => {
     expect(r.ignoreRoutes).toEqual([]);
   });
 
-  it('parses HAOC_OTEL_RESOLVED_PROFILE and compiles ignoreRoutes', () => {
-    process.env.HAOC_OTEL_RESOLVED_PROFILE = JSON.stringify({
+  it('parses OTEL_RESOLVED_PROFILE and compiles ignoreRoutes', () => {
+    process.env.OTEL_RESOLVED_PROFILE = JSON.stringify({
       profile: 'standard',
       captureRequestBody: true,
       captureResponseBody: false,
@@ -393,7 +394,7 @@ describe('getRuntimeProfile', () => {
   });
 
   it('memoises across calls', () => {
-    process.env.HAOC_OTEL_RESOLVED_PROFILE = JSON.stringify({
+    process.env.OTEL_RESOLVED_PROFILE = JSON.stringify({
       profile: 'verbose',
       captureRequestBody: true,
       captureResponseBody: true,
@@ -401,20 +402,20 @@ describe('getRuntimeProfile', () => {
     });
     const a = getRuntimeProfile();
     // Mutate env without resetting cache.
-    delete process.env.HAOC_OTEL_RESOLVED_PROFILE;
+    delete process.env.OTEL_RESOLVED_PROFILE;
     const b = getRuntimeProfile();
     expect(b).toBe(a);
   });
 
   it('_resetRuntimeProfileCache forces re-read', () => {
-    process.env.HAOC_OTEL_RESOLVED_PROFILE = JSON.stringify({
+    process.env.OTEL_RESOLVED_PROFILE = JSON.stringify({
       profile: 'verbose',
       captureRequestBody: true,
       captureResponseBody: true,
       ignoreRoutes: [],
     });
     const a = getRuntimeProfile();
-    delete process.env.HAOC_OTEL_RESOLVED_PROFILE;
+    delete process.env.OTEL_RESOLVED_PROFILE;
     _resetRuntimeProfileCache();
     const b = getRuntimeProfile();
     expect(b).not.toBe(a);
@@ -422,7 +423,7 @@ describe('getRuntimeProfile', () => {
   });
 
   it('falls back to minimal on malformed JSON', () => {
-    process.env.HAOC_OTEL_RESOLVED_PROFILE = 'not-json';
+    process.env.OTEL_RESOLVED_PROFILE = 'not-json';
     const r = getRuntimeProfile();
     expect(r.profile).toBe('minimal');
   });

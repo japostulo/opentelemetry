@@ -54,17 +54,17 @@ beforeEach(() => {
 });
 
 describe('HaocSpanProcessor.shouldDrop (via onEnd)', () => {
-  it('drops a span when haoc.drop=true', () => {
+  it('drops a span when otel.drop=true', () => {
     const inner = makeInner();
     const proc = new HaocSpanProcessor(inner, browserInfo, {
       ignoreUrls: [],
     });
-    const span = makeSpan({ 'haoc.drop': true });
+    const span = makeSpan({ 'otel.drop': true });
     proc.onEnd(span);
     expect(inner.onEnd).not.toHaveBeenCalled();
   });
 
-  it('forwards a span when haoc.drop is missing/false', () => {
+  it('forwards a span when otel.drop is missing/false', () => {
     const inner = makeInner();
     const proc = new HaocSpanProcessor(inner, browserInfo, {});
     proc.onEnd(makeSpan({}));
@@ -110,7 +110,7 @@ describe('HaocSpanProcessor.onStart', () => {
   it('skips enrichment + inner.onStart when span should be dropped', () => {
     const inner = makeInner();
     const proc = new HaocSpanProcessor(inner, browserInfo, {});
-    const span = makeSpan({ 'haoc.drop': true });
+    const span = makeSpan({ 'otel.drop': true });
     proc.onStart(span, fakeCtx);
     expect(inner.onStart).not.toHaveBeenCalled();
     // setAttribute must not have been called for enrichment fields.
