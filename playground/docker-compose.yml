@@ -1,8 +1,24 @@
 services:
+  # ─── Packages watcher ─────────────────────────────────────────────────────────
+  # Compiles packages/node and packages/web in --watch mode.
+  # The compiled dist/ is written back into the bind-mounted host directory,
+  # making it visible to all other containers that mount the same path.
+  packages-watcher:
+    build:
+      context: ..
+      dockerfile: playground/Dockerfile.packages-watcher
+    volumes:
+      - ../packages/node:/workspace/packages/node
+      - ../packages/web:/workspace/packages/web
+    networks:
+      - playground
+
   nestjs-app:
     build:
       context: ..
-      dockerfile: playground/nestjs-app/Dockerfile
+      dockerfile: playground/nestjs-app/Dockerfile.dev
+    depends_on:
+      - packages-watcher
     command: npm run dev
     ports:
       - "3010:3010"
@@ -16,7 +32,11 @@ services:
       OTEL_CAPTURE_RESPONSE: ${OTEL_CAPTURE_RESPONSE:-}
       LOG_DESTINATION: ${LOG_DESTINATION:-both}
     volumes:
-      - ./nestjs-app/src:/app/src
+      # Live lib source + dist (updated by packages-watcher)
+      - ../packages/node:/workspace/packages/node
+      # Live app source
+      - ./nestjs-app/src:/workspace/playground/nestjs-app/src
+    working_dir: /workspace/playground/nestjs-app
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -25,7 +45,9 @@ services:
   express-app:
     build:
       context: ..
-      dockerfile: playground/express-app/Dockerfile
+      dockerfile: playground/express-app/Dockerfile.dev
+    depends_on:
+      - packages-watcher
     command: npm run dev
     ports:
       - "3020:3020"
@@ -39,7 +61,9 @@ services:
       OTEL_CAPTURE_RESPONSE: ${OTEL_CAPTURE_RESPONSE:-}
       LOG_DESTINATION: ${LOG_DESTINATION:-both}
     volumes:
-      - ./express-app/src:/app/src
+      - ../packages/node:/workspace/packages/node
+      - ./express-app/src:/workspace/playground/express-app/src
+    working_dir: /workspace/playground/express-app
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -63,9 +87,10 @@ services:
       OTEL_CAPTURE_RESPONSE: ${OTEL_CAPTURE_RESPONSE:-}
       LOG_DESTINATION: ${LOG_DESTINATION:-both}
     volumes:
-      # Hot-reload: monta a lib diretamente sobre o symlink do Composer.
-      # Mudanças em packages/laravel/src/** refletem na próxima requisição
-      # sem precisar rebuildar ou restartar o container.
+      # Hot-reload: Composer installed the package as a symlink (symlink:true).
+      # This bind mount fills the symlink target with live host source.
+      # Changes to packages/laravel/src/** are visible on the next request
+      # without rebuilding or restarting the container.
       - ../packages/laravel:/packages/laravel
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -75,17 +100,20 @@ services:
   web-app:
     build:
       context: ..
-      dockerfile: playground/web-app/Dockerfile
-      target: dev
+      dockerfile: playground/web-app/Dockerfile.dev
+    depends_on:
+      - packages-watcher
     command: npm run dev -- --host 0.0.0.0 --port 8090
     ports:
       - "8090:8090"
     environment:
       CHOKIDAR_USEPOLLING: "true"
     volumes:
-      - ./web-app/src:/app/src
-      - ./web-app/index.html:/app/index.html
-      - ./web-app/vite.config.ts:/app/vite.config.ts
+      - ../packages/web:/workspace/packages/web
+      - ./web-app/src:/workspace/playground/web-app/src
+      - ./web-app/index.html:/workspace/playground/web-app/index.html
+      - ./web-app/vite.config.ts:/workspace/playground/web-app/vite.config.ts
+    working_dir: /workspace/playground/web-app
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
