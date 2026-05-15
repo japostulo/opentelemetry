@@ -1,7 +1,8 @@
 import {
-  Controller, Get, Post, Body,
+  Controller, Get, Post, Body, Req,
   HttpException, HttpStatus, Query,
 } from '@nestjs/common';
+import type { IncomingMessage } from 'http';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { trace, context, SpanStatusCode, identifyUser, getUser } from '@haocruz/opentelemetry';
 
@@ -28,13 +29,16 @@ export class AppController {
 
   /** Web → NestJS → Express → Laravel — full distributed chain. */
   @Get('chain')
-  async chain() {
+  async chain(@Req() req: IncomingMessage & { headers: Record<string, string | string[] | undefined> }) {
     const span = trace.getSpan(context.active());
     const traceId = span?.spanContext().traceId ?? 'none';
 
     this.logger.info({ step: 'fetching-downstream', traceId }, 'Chain: calling express-app');
 
-    const res = await fetch('http://express-app:3020/chain');
+    const fwdHeaders: Record<string, string> = {};
+    if (req.headers['x-test-run-id']) fwdHeaders['x-test-run-id'] = String(req.headers['x-test-run-id']);
+
+    const res = await fetch('http://express-app:3020/chain', { headers: fwdHeaders });
     const downstream = await res.json();
 
     this.logger.info({ step: 'downstream-received', status: res.status, traceId }, 'Chain: response received');
@@ -139,6 +143,60 @@ export class AppController {
       traceId: span?.spanContext().traceId ?? 'none',
       user: getUser(),
       tip: 'Check SigNoz — user.id / user.role / user.type are on the span. For logs too, use a guard (see /secured routes).',
+    };
+  }
+
+  /** Proxy: NestJS → Express /hello (for backend-to-backend trace propagation tests). */
+  @Get('proxy/express')
+  async proxyExpress(@Req() req: IncomingMessage & { headers: Record<string, string | string[] | undefined> }) {
+    const span = trace.getSpan(context.active());
+    const traceId = span?.spanContext().traceId ?? 'none';
+
+    this.logger.info({ step: 'proxy-express', traceId }, 'Proxying to express-app');
+
+    const fwdHeaders: Record<string, string> = {};
+    if (req.headers['x-test-run-id']) fwdHeaders['x-test-run-id'] = String(req.headers['x-test-run-id']);
+
+    const res = await fetch('http://express-app:3020/hello', { headers: fwdHeaders });
+    const downstream = await res.json();
+
+    return { service: 'nestjs', traceId, downstream };
+  }
+
+  /** Proxy: NestJS → Laravel /api/hello (for backend-to-backend trace propagation tests). */
+  @Get('proxy/laravel')
+  async proxyLaravel(@Req() req: IncomingMessage & { headers: Record<string, string | string[] | undefined> }) {
+    const span = trace.getSpan(context.active());
+    const traceId = span?.spanContext().traceId ?? 'none';
+
+    this.logger.info({ step: 'proxy-laravel', traceId }, 'Proxying to laravel-app');
+
+    const fwdHeaders: Record<string, string> = {};
+    if (req.headers['x-test-run-id']) fwdHeaders['x-test-run-id'] = String(req.headers['x-test-run-id']);
+
+    const res = await fetch('http://laravel-app:8080/api/hello', { headers: fwdHeaders });
+    const downstream = await res.json();
+
+    return { service: 'nestjs', traceId, downstream };
+  }
+
+  /**
+   * Debug endpoint — returns which OTel propagation headers were received.
+   * Only for playground/development. Never expose in production.
+   */
+  @Get('debug/headers')
+  debugHeaders(@Req() req: IncomingMessage & { headers: Record<string, string | string[] | undefined> }) {
+    return {
+      traceparent: !!req.headers['traceparent'],
+      tracestate: !!req.headers['tracestate'],
+      baggage: !!req.headers['baggage'],
+      'x-test-run-id': req.headers['x-test-run-id'] ?? null,
+      traceId: trace.getSpan(context.active())?.spanContext().traceId ?? null,
+      received: {
+        traceparent: req.headers['traceparent'] ?? null,
+        tracestate: req.headers['tracestate'] ?? null,
+        baggage: req.headers['baggage'] ?? null,
+      },
     };
   }
 }

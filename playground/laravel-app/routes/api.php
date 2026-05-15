@@ -79,3 +79,20 @@ Route::put('/admin/config', function () {
     return response()->json(array_merge(['service' => 'laravel'], $updated));
 });
 
+// ── Debug endpoint (playground/dev only) ──────────────────────────────────
+Route::get('/debug/headers', function () {
+    $traceId = \OpenTelemetry\API\Trace\Span::getCurrent()->getContext()->getTraceId();
+    return response()->json([
+        'traceparent'   => (bool) request()->header('traceparent'),
+        'tracestate'    => (bool) request()->header('tracestate'),
+        'baggage'       => (bool) request()->header('baggage'),
+        'x-test-run-id' => request()->header('x-test-run-id'),
+        'traceId'       => $traceId,
+        'received' => [
+            'traceparent' => request()->header('traceparent'),
+            'tracestate'  => request()->header('tracestate'),
+            'baggage'     => request()->header('baggage'),
+        ],
+    ]);
+});
+

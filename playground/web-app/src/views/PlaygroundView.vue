@@ -79,6 +79,15 @@ function triggerJsError() {
       <v-col cols="12" md="6">
         <ApiTester label="NestJS → Laravel" url="http://localhost:3010/chain-laravel" color="deep-purple" />
       </v-col>
+      <v-col cols="12" md="4">
+        <ApiTester label="NestJS → Express (proxy)" url="http://localhost:3010/proxy/express" color="indigo" />
+      </v-col>
+      <v-col cols="12" md="4">
+        <ApiTester label="NestJS → Laravel (proxy)" url="http://localhost:3010/proxy/laravel" color="indigo-darken-3" />
+      </v-col>
+      <v-col cols="12" md="4">
+        <ApiTester label="Express → Laravel (proxy)" url="http://localhost:3020/proxy/laravel" color="teal" />
+      </v-col>
     </v-row>
 
     <!-- Error Scenarios -->

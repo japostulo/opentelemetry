@@ -14,7 +14,7 @@ app.use((_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header(
     'Access-Control-Allow-Headers',
-    'Content-Type, Authorization, traceparent, tracestate, baggage, X-Request-ID, x-user-id, x-user-role',
+    'Content-Type, Authorization, traceparent, tracestate, baggage, X-Request-ID, x-user-id, x-user-role, x-test-run-id',
   );
   res.header('Access-Control-Expose-Headers', 'X-Trace-Id');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -49,7 +49,9 @@ app.get('/chain', async (req, res) => {
   req.log.info({ step: 'fetching-downstream', traceId }, 'Chain: calling laravel-app');
 
   try {
-    const upstream = await fetch('http://laravel-app:8080/api/hello');
+    const fwdHeaders: Record<string, string> = {};
+    if (req.headers['x-test-run-id']) fwdHeaders['x-test-run-id'] = String(req.headers['x-test-run-id']);
+    const upstream = await fetch('http://laravel-app:8080/api/hello', { headers: fwdHeaders });
     const downstream = await upstream.json();
 
     req.log.info({ step: 'downstream-received', status: upstream.status, traceId }, 'Chain: response received');
@@ -171,26 +173,56 @@ app.post('/secured/action', fakeAuth, (req, res) => {
   });
 });
 
-app.get('/secured/chain-auth', fakeAuth, async (req, res) => {
+// ── Proxy Endpoints (for backend-to-backend trace propagation tests) ─────────
+
+app.get('/proxy/nestjs', async (req, res) => {
   const span = trace.getSpan(context.active());
-  const user = getUser();
+  const traceId = span?.spanContext().traceId ?? 'none';
+  req.log.info({ step: 'proxy-nestjs', traceId }, 'Proxying to nestjs-app');
   try {
-    const upstream = await fetch('http://nestjs-app:3010/secured/profile', {
-      headers: {
-        'x-user-id': user?.id ?? '',
-        'x-user-role': user?.role ?? 'viewer',
-      },
-    });
+    const fwdHeaders: Record<string, string> = {};
+    if (req.headers['x-test-run-id']) fwdHeaders['x-test-run-id'] = String(req.headers['x-test-run-id']);
+    const upstream = await fetch('http://nestjs-app:3010/hello', { headers: fwdHeaders });
     const downstream = await upstream.json();
-    res.json({
-      service: 'express',
-      traceId: span?.spanContext().traceId ?? 'none',
-      user,
-      downstream,
-    });
+    res.json({ service: 'express', traceId, downstream });
   } catch (err) {
-    res.status(502).json({ error: err instanceof Error ? err.message : 'upstream failed' });
+    res.status(502).json({ service: 'express', error: err instanceof Error ? err.message : 'upstream failed' });
   }
+});
+
+app.get('/proxy/laravel', async (req, res) => {
+  const span = trace.getSpan(context.active());
+  const traceId = span?.spanContext().traceId ?? 'none';
+  req.log.info({ step: 'proxy-laravel', traceId }, 'Proxying to laravel-app');
+  try {
+    const fwdHeaders: Record<string, string> = {};
+    if (req.headers['x-test-run-id']) fwdHeaders['x-test-run-id'] = String(req.headers['x-test-run-id']);
+    const upstream = await fetch('http://laravel-app:8080/api/hello', { headers: fwdHeaders });
+    const downstream = await upstream.json();
+    res.json({ service: 'express', traceId, downstream });
+  } catch (err) {
+    res.status(502).json({ service: 'express', error: err instanceof Error ? err.message : 'upstream failed' });
+  }
+});
+
+/**
+ * Debug endpoint — returns which OTel propagation headers were received.
+ * Only for playground/development. Never expose in production.
+ */
+app.get('/debug/headers', (req, res) => {
+  const span = trace.getSpan(context.active());
+  res.json({
+    traceparent: !!req.headers['traceparent'],
+    tracestate: !!req.headers['tracestate'],
+    baggage: !!req.headers['baggage'],
+    'x-test-run-id': req.headers['x-test-run-id'] ?? null,
+    traceId: span?.spanContext().traceId ?? null,
+    received: {
+      traceparent: req.headers['traceparent'] ?? null,
+      tracestate: req.headers['tracestate'] ?? null,
+      baggage: req.headers['baggage'] ?? null,
+    },
+  });
 });
 
 const port = Number(process.env.PORT) || 3020;

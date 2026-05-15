@@ -8,7 +8,7 @@ import { SecuredController } from './secured.controller';
   imports: [
     OtelModule.forRoot({
       extraSensitiveFields: ['cpf', 'rg'],
-      extraAllowedHeaders: ['x-user-id', 'x-user-role'],
+      extraAllowedHeaders: ['x-user-id', 'x-user-role', 'x-test-run-id'],
     }),
   ],
   controllers: [AppController, AdminController, SecuredController],
