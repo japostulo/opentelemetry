@@ -3,7 +3,6 @@
   "description": "HAOC OpenTelemetry instrumentation for Laravel — traces, logs, user identity, and infrastructure tracking",
   "type": "library",
   "license": "proprietary",
-  "version": "1.1.0",
   "require": {
     "php": "^8.2",
     "laravel/framework": "^11.0 || ^12.0",

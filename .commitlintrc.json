@@ -1,0 +1,20 @@
+{
+  "extends": ["@commitlint/config-conventional"],
+  "rules": {
+    "scope-enum": [
+      2,
+      "always",
+      [
+        "node",
+        "web",
+        "laravel",
+        "deps",
+        "ci",
+        "release",
+        "docs",
+        "playground"
+      ]
+    ],
+    "scope-empty": [0]
+  }
+}

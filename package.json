@@ -20,13 +20,24 @@
     "test:coverage": "vitest run --coverage",
     "dev:packages": "concurrently \"npm run dev -w @haocruz/opentelemetry\" \"npm run dev -w @haocruz/opentelemetry-web\"",
     "dev:playground": "docker compose -f playground/docker-compose.yml up",
-    "dev:all": "concurrently \"npm run dev:packages\" \"npm run dev:playground\""
+    "dev:all": "concurrently \"npm run dev:packages\" \"npm run dev:playground\"",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.0.1",
+    "@commitlint/config-conventional": "^21.0.1",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.6",
     "@types/node": "^20.11.0",
     "@vitest/coverage-v8": "^1.6.0",
     "concurrently": "^9.0.0",
+    "conventional-changelog-conventionalcommits": "^9.3.1",
     "happy-dom": "^14.12.3",
+    "husky": "^9.1.7",
+    "semantic-release": "^24.2.9",
+    "semantic-release-monorepo": "^8.0.2",
     "typescript": "^5.3.0",
     "vitest": "^1.6.0"
   }
