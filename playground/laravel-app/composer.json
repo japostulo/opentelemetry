@@ -9,7 +9,10 @@
     "repositories": [
         {
             "type": "path",
-            "url": "/packages/laravel"
+            "url": "/packages/laravel",
+            "options": {
+                "symlink": true
+            }
         }
     ],
     "autoload": {

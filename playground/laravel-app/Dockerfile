@@ -12,6 +12,9 @@ FROM base AS app
 
 WORKDIR /app
 
+# Disable opcache so PHP file changes in bind-mounted packages are picked up immediately
+RUN echo "opcache.enable=0\nopcache.enable_cli=0" > /usr/local/etc/php/conf.d/disable-opcache.ini
+
 # Copy the lib as a local path repository
 COPY packages/laravel/ /packages/laravel/
 
