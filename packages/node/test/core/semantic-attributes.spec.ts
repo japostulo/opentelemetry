@@ -18,6 +18,7 @@ import {
   ATTR_REQUEST_JSON,
   ATTR_RESPONSE_JSON,
   ATTR_ERROR_JSON,
+  ATTR_TEST_RUN_ID,
   // deprecated aliases
   ATTR_HAOC_PROFILE,
   ATTR_HAOC_IS_PREFLIGHT,
@@ -112,6 +113,10 @@ describe('semantic-attributes', () => {
 
     it("ATTR_ERROR_JSON = 'error.json'", () => {
       expect(ATTR_ERROR_JSON).toBe('error.json');
+    });
+
+    it("ATTR_TEST_RUN_ID = 'test.run_id'", () => {
+      expect(ATTR_TEST_RUN_ID).toBe('test.run_id');
     });
   });
 

@@ -101,6 +101,12 @@ final class SemanticAttributes
     public const HAOC_ERROR_JSON = self::ERROR_JSON;
 
     /**
+     * Test correlation ID from the x-test-run-id HTTP header.
+     * Used by validation scripts to identify spans in ClickHouse queries.
+     */
+    public const TEST_RUN_ID = 'test.run_id';
+
+    /**
      * Clean one-line title shown in the SigNoz log list.
      * Format: "METHOD /route [traceId]" for requests,
      *         "METHOD /route STATUS DURms [traceId]" for responses.

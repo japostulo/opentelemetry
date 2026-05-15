@@ -139,6 +139,12 @@ class TraceRequest
             }
         }
 
+        // ── Test correlation header ─────────────────────────────────────
+        $testRunId = $request->header('x-test-run-id');
+        if ($testRunId) {
+            $span->setAttribute(SemanticAttributes::TEST_RUN_ID, $testRunId);
+        }
+
         // Query params
         foreach ($this->sanitize($request->query(), $sensitiveFields) as $key => $value) {
             $span->setAttribute("request.query.{$key}", is_scalar($value) ? $value : json_encode($value));

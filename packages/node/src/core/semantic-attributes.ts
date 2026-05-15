@@ -102,6 +102,13 @@ export const ATTR_ERROR_JSON = 'error.json';
 /** @deprecated Use {@link ATTR_ERROR_JSON} */
 export const ATTR_HAOC_ERROR_JSON = ATTR_ERROR_JSON;
 
+/**
+ * Test correlation ID from the `x-test-run-id` HTTP header.
+ * Used by validation scripts to identify spans belonging to a specific
+ * test run in ClickHouse queries.
+ */
+export const ATTR_TEST_RUN_ID = 'test.run_id';
+
 // ── log.event values ──────────────────────────────────────────────────────
 
 export type LogEvent =

@@ -29,6 +29,7 @@ import {
   ATTR_REQUEST_JSON,
   ATTR_RESPONSE_JSON,
   ATTR_ERROR_JSON,
+  ATTR_TEST_RUN_ID,
   LOG_EVENT_REQUEST,
   LOG_EVENT_RESPONSE,
   LOG_EVENT_ERROR,
@@ -165,6 +166,12 @@ export class OtelInterceptor implements NestInterceptor {
       if (headers['x-forwarded-host']) activeSpan.setAttribute('http.forwarded_host', String(headers['x-forwarded-host']));
       if (headers['x-forwarded-proto']) activeSpan.setAttribute('http.forwarded_proto', String(headers['x-forwarded-proto']));
       if (headers['via']) activeSpan.setAttribute('http.via', String(headers['via']));
+
+      // ── Test correlation header ─────────────────────────────────────
+      const testRunId = request.headers?.['x-test-run-id'];
+      if (testRunId) {
+        activeSpan.setAttribute(ATTR_TEST_RUN_ID, String(testRunId));
+      }
 
       // ── Baggage from Frontend ──────────────────────────────────────
       const baggage = propagation.getBaggage(context.active());

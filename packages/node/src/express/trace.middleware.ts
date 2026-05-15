@@ -26,6 +26,7 @@ import {
   ATTR_LOG_TITLE,
   ATTR_REQUEST_JSON,
   ATTR_RESPONSE_JSON,
+  ATTR_TEST_RUN_ID,
   LOG_EVENT_REQUEST,
   LOG_EVENT_RESPONSE,
   LOG_EVENT_ERROR,
@@ -151,6 +152,12 @@ export function createTraceMiddleware(options?: TraceMiddlewareOptions) {
       }
       if (headers['via']) {
         activeSpan.setAttribute('http.via', String(headers['via']));
+      }
+
+      // ── Test correlation header ────────────────────────────────────
+      const testRunId = headers['x-test-run-id'];
+      if (testRunId) {
+        activeSpan.setAttribute(ATTR_TEST_RUN_ID, String(testRunId));
       }
 
       // ── Baggage from Frontend ──────────────────────────────────────
