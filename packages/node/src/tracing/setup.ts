@@ -77,7 +77,11 @@ function buildInstrumentationConfig(
   // ── HTTP: filter incoming + outgoing + enrichment hook ───────────────
   if (resolved.instrumentations.http) {
     cfg['@opentelemetry/instrumentation-http'] = {
-      ignoreIncomingRequestHook: (req: { url?: string }): boolean => {
+      ignoreIncomingRequestHook: (req: { url?: string; method?: string }): boolean => {
+        // Drop OPTIONS preflight for non-verbose profiles.
+        if (resolved.ignoreOptions && req.method?.toUpperCase() === 'OPTIONS') {
+          return true;
+        }
         const url = req.url ?? '';
         // The url here is the raw request-target (e.g. "/health?x=1");
         // strip query for matching.

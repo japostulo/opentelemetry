@@ -46,6 +46,12 @@ export interface ResolvedProfile {
   logBodyIgnoreRoutes: RegExp[];
   /** If non-empty, ONLY these routes will have body/response in log entries. Takes precedence over logBodyIgnoreRoutes. */
   logBodyOnlyRoutes: RegExp[];
+  /**
+   * When true, incoming OPTIONS (CORS preflight) requests are silently
+   * dropped — no span is created, no log emitted.
+   * Enabled for `minimal` and `standard`; disabled for `verbose`.
+   */
+  ignoreOptions: boolean;
   instrumentations: {
     fs: boolean;
     net: boolean;
@@ -92,6 +98,7 @@ const PROFILES: Record<OtelProfileName, ResolvedProfile> = {
     logPayloadMode: 'none' as PayloadMode,
     logBodyIgnoreRoutes: [],
     logBodyOnlyRoutes: [],
+    ignoreOptions: true,
     instrumentations: {
       fs: false,
       net: false,
@@ -126,6 +133,7 @@ const PROFILES: Record<OtelProfileName, ResolvedProfile> = {
     logPayloadMode: 'json-attr' as PayloadMode,
     logBodyIgnoreRoutes: [],
     logBodyOnlyRoutes: [],
+    ignoreOptions: true,
     instrumentations: {
       fs: false,
       net: false,
@@ -156,6 +164,7 @@ const PROFILES: Record<OtelProfileName, ResolvedProfile> = {
     logPayloadMode: 'json-attr' as PayloadMode,
     logBodyIgnoreRoutes: [],
     logBodyOnlyRoutes: [],
+    ignoreOptions: false,
     instrumentations: {
       fs: true,
       net: true,
@@ -387,6 +396,7 @@ export function resolveProfile(overrides: ProfileOverrides = {}): ResolvedProfil
     logPayloadMode,
     logBodyIgnoreRoutes,
     logBodyOnlyRoutes,
+    ignoreOptions: base.ignoreOptions,
     instrumentations,
   };
 }

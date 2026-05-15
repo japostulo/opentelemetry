@@ -165,7 +165,8 @@ export class HaocSpanProcessor implements SpanProcessor {
     // OTel default for fetch is "HTTP GET", "HTTP POST".
     // We normalise both to "METHOD /path" using http.url when available.
     const attrs = span.attributes;
-    const httpUrl = attrs['http.url'] as string | undefined;
+    // Older instrumentation uses `http.url`; newer (semconv stable) uses `url.full`.
+    const httpUrl = (attrs['http.url'] ?? attrs['url.full']) as string | undefined;
     if (httpUrl && /^(HTTP )?(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(span.name)) {
       try {
         const parsed = new URL(httpUrl);
