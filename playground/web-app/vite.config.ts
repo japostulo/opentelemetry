@@ -7,4 +7,11 @@ export default defineConfig({
     vue(),
     vuetify({ autoImport: true }),
   ],
+  optimizeDeps: {
+    exclude: ['@haocruz/opentelemetry-web'],
+  },
+  server: {
+    fs: { allow: ['..', '../..'] },
+    watch: { followSymlinks: true },
+  },
 });
