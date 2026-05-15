@@ -8,6 +8,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@haocruz/opentelemetry-web": "*",
     "vue": "^3.4.0",
     "vue-router": "^4.3.0",
     "vuetify": "^3.6.0",
