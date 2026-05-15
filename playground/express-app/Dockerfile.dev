@@ -1,0 +1,21 @@
+FROM node:20-slim
+
+WORKDIR /workspace
+
+# Copy workspace root manifests
+COPY package.json package-lock.json* tsconfig.base.json tsconfig.json ./
+
+# Copy all package manifests + tsconfigs (needed for workspace resolution and compilation)
+COPY packages/node/package.json packages/node/tsconfig.json packages/node/tsconfig.build.json ./packages/node/
+COPY packages/web/package.json packages/web/tsconfig.json packages/web/tsconfig.build.json ./packages/web/
+COPY playground/nestjs-app/package.json playground/nestjs-app/tsconfig.json ./playground/nestjs-app/
+COPY playground/express-app/package.json playground/express-app/tsconfig.json ./playground/express-app/
+COPY playground/web-app/package.json playground/web-app/tsconfig.json ./playground/web-app/
+
+# Install all workspace deps
+# node_modules/@haocruz/opentelemetry -> symlink -> ../../packages/node
+RUN npm install
+
+WORKDIR /workspace/playground/express-app
+
+# CMD is defined in docker-compose to allow override
