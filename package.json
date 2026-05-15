@@ -7,18 +7,25 @@
   "license": "MIT",
   "workspaces": [
     "packages/node",
-    "packages/web"
+    "packages/web",
+    "playground/nestjs-app",
+    "playground/express-app",
+    "playground/web-app"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "clean": "npm run clean --workspaces",
+    "build": "npm run build --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "dev:packages": "concurrently \"npm run dev -w @haocruz/opentelemetry\" \"npm run dev -w @haocruz/opentelemetry-web\"",
+    "dev:playground": "docker compose -f playground/docker-compose.yml up",
+    "dev:all": "concurrently \"npm run dev:packages\" \"npm run dev:playground\""
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@vitest/coverage-v8": "^1.6.0",
+    "concurrently": "^9.0.0",
     "happy-dom": "^14.12.3",
     "typescript": "^5.3.0",
     "vitest": "^1.6.0"
