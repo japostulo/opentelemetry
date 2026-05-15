@@ -161,17 +161,17 @@ export class HaocSpanProcessor implements SpanProcessor {
     if (this.shouldDrop(span)) return;
 
     // ── Enrich span name with HTTP path ─────────────────────────────
-    // OTel default for XHR/fetch is just the method ("GET", "POST").
-    // We upgrade to "METHOD /path" using http.url when available.
+    // OTel default for XHR is just the method ("GET", "POST").
+    // OTel default for fetch is "HTTP GET", "HTTP POST".
+    // We normalise both to "METHOD /path" using http.url when available.
     const attrs = span.attributes;
     const httpUrl = attrs['http.url'] as string | undefined;
-    if (httpUrl && /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(span.name)) {
+    if (httpUrl && /^(HTTP )?(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/i.test(span.name)) {
       try {
         const parsed = new URL(httpUrl);
-        // ReadableSpan is read-only, but the underlying Span object is
-        // still mutable at this point (before the batch export flushes).
+        const method = span.name.replace(/^HTTP /i, '').toUpperCase();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (span as any).name = `${span.name} ${parsed.pathname}`;
+        (span as any).name = `${method} ${parsed.pathname}`;
       } catch {
         // ignore URL parsing errors
       }

@@ -60,9 +60,15 @@ function buildInstrumentationConfig(
 ): Record<string, unknown> {
   const cfg: Record<string, unknown> = {};
 
+  // Some profile keys differ from their npm package suffix.
+  const PACKAGE_NAME_MAP: Record<string, string> = {
+    nestjs: 'nestjs-core',
+  };
+
   // Disable instrumentations whose profile flag is false.
   const disable = (name: string) => {
-    cfg[`@opentelemetry/instrumentation-${name}`] = { enabled: false };
+    const pkgName = PACKAGE_NAME_MAP[name] ?? name;
+    cfg[`@opentelemetry/instrumentation-${pkgName}`] = { enabled: false };
   };
   for (const [name, enabled] of Object.entries(resolved.instrumentations)) {
     if (!enabled) disable(name);
@@ -90,14 +96,39 @@ function buildInstrumentationConfig(
         return matchesAny(resolved.ignoreOutgoingUrls, target);
       },
       requestHook: (span: unknown, request: unknown) => {
-        (span as import('@opentelemetry/api').Span).setAttribute(
-          'environment',
-          environment,
-        );
-        userHook?.(span as import('@opentelemetry/api').Span, request);
+        const s = span as import('@opentelemetry/api').Span;
+        const req = request as Record<string, unknown>;
+        s.setAttribute('environment', environment);
+
+        // Rename outgoing HTTP client spans from bare "GET" to "GET /path".
+        // Outgoing requests (http.ClientRequest) have `.path` but no `.url`.
+        // Incoming requests (http.IncomingMessage) have `.url` instead.
+        const path = req['path'] as string | undefined;
+        const url = req['url'] as string | undefined;
+        const method = req['method'] as string | undefined;
+        if (path && !url && method) {
+          const cleanPath = path.split('?')[0] || '/';
+          s.updateName(`${method} ${cleanPath}`);
+        }
+
+        userHook?.(s, request);
       },
     };
   }
+
+  // ── Undici (Node.js built-in fetch): rename "GET" → "GET /path" ──────
+  // native fetch uses undici under the hood; its default span name is just
+  // the HTTP method. We enrich it with the path at requestHook time.
+  cfg['@opentelemetry/instrumentation-undici'] = {
+    requestHook: (span: unknown, request: unknown) => {
+      const s = span as import('@opentelemetry/api').Span;
+      const req = request as { method?: string; path?: string };
+      if (req.method && req.path) {
+        const cleanPath = req.path.split('?')[0] || '/';
+        s.updateName(`${req.method} ${cleanPath}`);
+      }
+    },
+  };
 
   // ── Express: drop noisy layer spans ──────────────────────────────────
   if (

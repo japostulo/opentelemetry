@@ -61,7 +61,7 @@ assert_trace() {
 
   local span_cnt svc_count
   span_cnt=$(ch "SELECT count() FROM signoz_traces.signoz_index_v3 WHERE trace_id='$tid'")
-  assert_ge "spans" 6 "${span_cnt:-0}"
+  assert_ge "spans" 5 "${span_cnt:-0}"
   svc_count=$(ch "SELECT count(DISTINCT resource_string_service\$\$name) FROM signoz_traces.signoz_index_v3 WHERE trace_id='$tid'")
   assert_eq "distinct services on trace" 3 "${svc_count:-0}"
 

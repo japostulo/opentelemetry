@@ -141,6 +141,9 @@ export class OtelInterceptor implements NestInterceptor {
         'environment',
         process.env.OTEL_ENVIRONMENT || process.env.APP_ENV || 'local',
       );
+      // NestJS controller/handler attrs (previously set by nestjs-core instrumentation)
+      activeSpan.setAttribute('nestjs.controller', ctx.getClass().name);
+      activeSpan.setAttribute('nestjs.callback', ctx.getHandler().name);
       if (rawQuery) flattenToSpan(activeSpan, 'request.query', rawQuery, 0, this.sensitiveFields);
       if (rawParams) flattenToSpan(activeSpan, 'request.params', rawParams, 0, this.sensitiveFields);
       if (captureBody && inputPayload) flattenToSpan(activeSpan, 'body', inputPayload, 0, this.sensitiveFields);

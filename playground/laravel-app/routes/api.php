@@ -2,21 +2,16 @@
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
-use OpenTelemetry\API\Trace\TracerInterface;
-use OpenTelemetry\API\Trace\StatusCode;
 use App\Http\Middleware\RuntimeConfigMiddleware;
 
-Route::get('/hello', function (TracerInterface $tracer) {
-    $span = $tracer->spanBuilder('GET /api/hello')->startSpan();
-    $traceId = $span->getContext()->getTraceId();
+Route::get('/hello', function () {
+    $traceId = \OpenTelemetry\API\Trace\Span::getCurrent()->getContext()->getTraceId();
 
     Log::info('Processing /api/hello', [
         'step'    => 'handler',
         'traceId' => $traceId,
         'service' => 'laravel',
     ]);
-
-    $span->end();
 
     return response()->json([
         'service' => 'laravel',
