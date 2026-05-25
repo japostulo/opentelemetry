@@ -13,6 +13,8 @@ COPY packages/node/src/ packages/node/src/
 COPY packages/web/package.json packages/web/tsconfig.json packages/web/tsconfig.build.json packages/web/
 COPY packages/web/src/ packages/web/src/
 
-RUN npm install --workspaces
+RUN npm install --workspaces --ignore-scripts
 
-CMD ["npm", "run", "build", "--workspaces"]
+RUN npm run build --workspaces
+
+CMD ["echo", "build complete"]

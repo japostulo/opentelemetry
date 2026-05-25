@@ -42,6 +42,16 @@ export interface HaocBootstrapConfig extends OtelConfig {
 }
 
 /**
+ * Resolves allowed CORS origins from the environment.
+ * Reads `ALLOWED_DOMAINS` (comma-separated) if present, otherwise allows all origins.
+ */
+function resolveAllowedDomains(): boolean | string[] {
+  const raw = process.env.ALLOWED_DOMAINS?.trim();
+  if (!raw) return true;
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/**
  * Applies OpenTelemetry standard configuration to a NestJS application:
  *
  * 1. `app.useLogger()` — routes all Nest logs through Pino
@@ -73,7 +83,7 @@ export function configureApp(
   }
 
   app.enableCors({
-    origin: options?.corsOrigin ?? true,
+    origin: options?.corsOrigin ?? resolveAllowedDomains(),
     allowedHeaders: corsConfig.allowedHeaders,
     exposedHeaders: corsConfig.exposedHeaders,
   });

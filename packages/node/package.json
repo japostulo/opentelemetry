@@ -1,6 +1,6 @@
 {
   "name": "@haocruz/opentelemetry",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "HAOC OpenTelemetry library — standardized tracing, metrics, and structured logging for Node.js backends (NestJS & Express)",
   "author": "Hospital Alemão Oswaldo Cruz",
   "license": "MIT",
@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "require": "./dist/index.js"
+    },
+    "./instrument": {
+      "types": "./dist/instrument.d.ts",
+      "require": "./dist/instrument.js"
     },
     "./core": {
       "types": "./dist/core/index.d.ts",
@@ -26,6 +30,7 @@
   },
   "typesVersions": {
     "*": {
+      "instrument": ["./dist/instrument.d.ts"],
       "core": ["./dist/core/index.d.ts"],
       "nestjs": ["./dist/nestjs/index.d.ts"],
       "express": ["./dist/express/index.d.ts"]
@@ -59,7 +64,8 @@
     "@opentelemetry/semantic-conventions": ">=1.40.0",
     "nestjs-pino": "^4.0.0",
     "pino": "^8.0.0 || ^9.0.0",
-    "pino-http": "^9.0.0 || ^10.0.0"
+    "pino-http": "^9.0.0 || ^10.0.0",
+    "pino-pretty": "^11.0.0 || ^13.0.0"
   },
   "peerDependencies": {
     "@nestjs/common": "^9.0.0 || ^10.0.0 || ^11.0.0",

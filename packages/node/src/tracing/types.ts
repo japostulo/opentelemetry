@@ -9,8 +9,9 @@ import type {
 export interface OtelConfig {
   /**
    * The service name reported in traces, metrics, and logs.
+   * @default OTEL_SERVICE_NAME env var || 'unknown'
    */
-  serviceName: string;
+  serviceName?: string;
 
   /**
    * Deployment environment (e.g. 'local', 'dev', 'staging', 'production').

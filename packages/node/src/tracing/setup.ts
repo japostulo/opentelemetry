@@ -161,7 +161,8 @@ function buildInstrumentationConfig(
  * setupTracing({ serviceName: 'my-api', profile: 'minimal' });
  * ```
  */
-export function setupTracing(config: OtelConfig): NodeSDK {
+export function setupTracing(config?: OtelConfig): NodeSDK {
+  config = config ?? {};
   const environment =
     config.environment ??
     process.env.OTEL_ENVIRONMENT ??
